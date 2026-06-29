@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — النقاط</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a><a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a><a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a><a href="groups.html" class="sidebar-link">👥 المجموعات</a><a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a><a href="location.html" class="sidebar-link">📍 الموقع</a><a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a><a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a><a href="points.html" class="sidebar-link active">⭐ النقاط</a><a href="tasks.html" class="sidebar-link">📋 المهام</a><a href="notifications.html" class="sidebar-link">📢 الإشعارات</a><a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a><a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a><a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a><a href="invoices.html" class="sidebar-link">🧾 الفواتير</a><a href="budget.html" class="sidebar-link">💰 الميزانية</a><a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0"><a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>⭐ النقاط ولوحة الصدارة</h1>
+        <button class="btn btn-primary" onclick="openPointsModal()">+ إضافة نقاط</button>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="showSection('students-rank')">ترتيب الطلاب</button>
+        <button class="tab" onclick="showSection('groups-rank')">ترتيب المجموعات</button>
+        <button class="tab" onclick="showSection('points-log')">سجل النقاط</button>
+      </div>
+
+      <div id="students-rank" class="section">
+        <div class="table-container">
+          <table><thead><tr><th>#</th><th>الطالب</th><th>المجموعة</th><th>النقاط</th></tr></thead>
+          <tbody id="students-rank-table"></tbody></table>
+        </div>
+      </div>
+
+      <div id="groups-rank" class="section" style="display:none">
+        <div class="table-container">
+          <table><thead><tr><th>#</th><th>المجموعة</th><th>النقاط</th><th>المهام المنجزة</th><th>الصور المعتمدة</th></tr></thead>
+          <tbody id="groups-rank-table"></tbody></table>
+        </div>
+      </div>
+
+      <div id="points-log" class="section" style="display:none">
+        <div class="table-container">
+          <table><thead><tr><th>التاريخ</th><th>الطالب</th><th>النقاط</th><th>السبب</th></tr></thead>
+          <tbody id="points-log-table"></tbody></table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add Points Modal -->
+  <div class="modal-overlay" id="points-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>إضافة نقاط</h3><button class="modal-close" onclick="closePointsModal()">&times;</button></div>
+      <form onsubmit="addPoints(event)">
+        <div class="form-group"><label>الطالب</label><select id="point-student" class="form-control" required></select></div>
+        <div class="form-group"><label>عدد النقاط</label><input type="number" id="point-amount" class="form-control" min="1" required></div>
+        <div class="form-group"><label>السبب</label><input type="text" id="point-reason" class="form-control" required></div>
+        <button type="submit" class="btn btn-primary" style="width:100%">إضافة</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    let allStudents = [], allGroups = [];
+
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(s => s.style.display = 'none');
+      document.getElementById(id).style.display = 'block';
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+    }
+
+    db.collection('students').orderBy('points', 'desc').onSnapshot(snap => {
+      allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const tbody = document.getElementById('students-rank-table');
+      tbody.innerHTML = allStudents.map((s, i) => {
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
+        const group = allGroups.find(g => g.id === s.groupId);
+        return `<tr><td>${medal}</td><td style="font-weight:600">${s.name}</td><td>${group ? group.name : '-'}</td><td style="font-weight:700;color:var(--primary)">${s.points || 0}</td></tr>`;
+      }).join('');
+      // Update dropdown
+      document.getElementById('point-student').innerHTML = '<option value="">اختر الطالب</option>' + allStudents.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    });
+
+    db.collection('groups').orderBy('points', 'desc').onSnapshot(snap => {
+      allGroups = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const tbody = document.getElementById('groups-rank-table');
+      tbody.innerHTML = allGroups.map((g, i) => {
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
+        return `<tr><td>${medal}</td><td style="font-weight:600">${g.name}</td><td style="font-weight:700;color:var(--primary)">${g.points || 0}</td><td>-</td><td>-</td></tr>`;
+      }).join('');
+    });
+
+    db.collection('points').orderBy('createdAt', 'desc').limit(50).onSnapshot(snap => {
+      const tbody = document.getElementById('points-log-table');
+      if (snap.empty) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px">لا توجد عمليات</td></tr>'; return; }
+      tbody.innerHTML = snap.docs.map(doc => {
+        const d = doc.data();
+        const date = d.createdAt ? d.createdAt.toDate().toLocaleDateString('ar-SA') : '-';
+        return `<tr><td>${date}</td><td>${d.studentName || '-'}</td><td style="font-weight:700;color:var(--success)">+${d.amount}</td><td>${d.reason || '-'}</td></tr>`;
+      }).join('');
+    });
+
+    function openPointsModal() { document.getElementById('points-modal').classList.add('active'); }
+    function closePointsModal() { document.getElementById('points-modal').classList.remove('active'); }
+
+    async function addPoints(e) {
+      e.preventDefault();
+      const studentId = document.getElementById('point-student').value;
+      const amount = parseInt(document.getElementById('point-amount').value);
+      const reason = document.getElementById('point-reason').value.trim();
+      const student = allStudents.find(s => s.id === studentId);
+      if (!student) return;
+
+      await db.collection('students').doc(studentId).update({ points: firebase.firestore.FieldValue.increment(amount) });
+      await db.collection('points').add({
+        studentId, studentName: student.name, groupId: student.groupId, supervisorId: student.supervisorId,
+        amount, reason, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      await addTimelineEvent(`+${amount} نقاط للطالب ${student.name} — ${reason}`, 'points');
+      showToast('تمت إضافة النقاط');
+      closePointsModal();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — الميزانية</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a><a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a><a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a><a href="groups.html" class="sidebar-link">👥 المجموعات</a><a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a><a href="location.html" class="sidebar-link">📍 الموقع</a><a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a><a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a><a href="points.html" class="sidebar-link">⭐ النقاط</a><a href="tasks.html" class="sidebar-link">📋 المهام</a><a href="notifications.html" class="sidebar-link">📢 الإشعارات</a><a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a><a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a><a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a><a href="invoices.html" class="sidebar-link">🧾 الفواتير</a><a href="budget.html" class="sidebar-link active">💰 الميزانية</a><a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0"><a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header"><h1>💰 الميزانية</h1></div>
+
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-number" id="budget-total">0</div><div class="stat-label">الميزانية الكلية (ريال)</div></div>
+        <div class="stat-card accent"><div class="stat-icon">📉</div><div class="stat-number" id="budget-spent">0</div><div class="stat-label">المصروف (ريال)</div></div>
+        <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-number" id="budget-remaining">0</div><div class="stat-label">المتبقي (ريال)</div></div>
+      </div>
+
+      <!-- Progress Bar -->
+      <div class="card" style="margin-top:24px">
+        <h3 style="font-weight:700;margin-bottom:12px">نسبة الصرف</h3>
+        <div style="background:var(--surface-2);border-radius:12px;height:24px;overflow:hidden">
+          <div id="budget-bar" style="height:100%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:12px;transition:width 0.5s;width:0%"></div>
+        </div>
+        <p style="text-align:center;margin-top:8px;font-weight:700" id="budget-percent">0%</p>
+      </div>
+
+      <!-- Set Budget -->
+      <div class="card" style="margin-top:24px;max-width:400px">
+        <h3 style="font-weight:700;margin-bottom:12px">تعديل الميزانية الكلية</h3>
+        <div class="form-group"><input type="number" id="new-budget" class="form-control" placeholder="أدخل المبلغ الكلي"></div>
+        <button class="btn btn-primary" onclick="setBudget()">💾 حفظ</button>
+      </div>
+
+      <!-- Category Breakdown -->
+      <div class="card" style="margin-top:24px">
+        <h3 style="font-weight:700;margin-bottom:16px">توزيع المصروفات حسب الفئة</h3>
+        <canvas id="budget-chart" style="max-height:300px"></canvas>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    let budgetData = { total: 0, spent: 0 };
+
+    db.collection('budget').doc('main').onSnapshot(doc => {
+      if (doc.exists) budgetData = doc.data();
+      document.getElementById('budget-total').textContent = (budgetData.total || 0).toLocaleString();
+      document.getElementById('budget-spent').textContent = (budgetData.spent || 0).toLocaleString();
+      const remaining = (budgetData.total || 0) - (budgetData.spent || 0);
+      document.getElementById('budget-remaining').textContent = remaining.toLocaleString();
+      const percent = budgetData.total > 0 ? Math.round((budgetData.spent / budgetData.total) * 100) : 0;
+      document.getElementById('budget-bar').style.width = percent + '%';
+      document.getElementById('budget-percent').textContent = percent + '%';
+      document.getElementById('new-budget').value = budgetData.total || '';
+    });
+
+    // Category breakdown from approved invoices
+    db.collection('invoices').where('status', '==', 'approved').onSnapshot(snap => {
+      const categories = {};
+      snap.docs.forEach(d => {
+        const inv = d.data();
+        const cat = inv.category || 'أخرى';
+        categories[cat] = (categories[cat] || 0) + (inv.amount || 0);
+      });
+      const labels = Object.keys(categories);
+      const data = Object.values(categories);
+      const colors = ['#0f766e','#f59e0b','#ef4444','#3b82f6','#8b5cf6','#ec4899','#10b981'];
+      
+      const ctx = document.getElementById('budget-chart');
+      if (window.budgetChartInstance) window.budgetChartInstance.destroy();
+      window.budgetChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: { labels, datasets: [{ data, backgroundColor: colors.slice(0, labels.length), borderWidth: 0 }] },
+        options: { plugins: { legend: { position: 'bottom' } } }
+      });
+    });
+
+    async function setBudget() {
+      const total = parseInt(document.getElementById('new-budget').value);
+      if (!total || total <= 0) return showToast('أدخل مبلغاً صحيحاً', 'error');
+      await db.collection('budget').doc('main').set({ total, spent: budgetData.spent || 0 }, { merge: true });
+      showToast('تم تحديث الميزانية');
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — بوابة الطالب</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="portal-layout">
+    <header class="portal-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <img src="assets/logo.png" alt="شعار الجمعية" class="portal-logo">
+        <div><h2 style="font-size:16px;font-weight:700">بوابة الطالب</h2><p style="font-size:12px;color:rgba(255,255,255,.82)" id="student-name-header">مرحباً</p></div>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="sessionStorage.clear();location.href='index.html'">خروج</button>
+    </header>
+
+    <main class="portal-content">
+      <div class="card soft-card" style="margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+          <div>
+            <h2 id="student-display-name" style="font-size:20px;font-weight:800">الطالب</h2>
+            <p id="student-display-code" style="color:var(--text-muted);font-size:13px">-</p>
+            <p id="student-display-group" style="color:var(--text-muted);font-size:13px">-</p>
+          </div>
+          <div style="text-align:center">
+            <div id="student-points" style="font-size:36px;font-weight:900;color:var(--primary)">0</div>
+            <div style="font-size:13px;color:var(--text-muted)">نقاطي</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabs" style="margin-bottom:20px">
+        <button class="tab active" onclick="showStudentTab('schedule-view', event)">الجدول</button>
+        <button class="tab" onclick="showStudentTab('leaderboard', event)">الترتيب</button>
+        <button class="tab" onclick="showStudentTab('my-media', event)">إعلام اليوم</button>
+        <button class="tab" onclick="showStudentTab('my-tasks', event)">مهامي</button>
+        <button class="tab" onclick="showStudentTab('notifications-view', event)">إشعارات ورسائل</button>
+      </div>
+
+      <div id="schedule-view" class="portal-section">
+        <h3 style="font-weight:700;margin-bottom:16px">📅 جدول اليوم</h3>
+        <div id="student-schedule"></div>
+      </div>
+
+      <div id="leaderboard" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">🏆 لوحة الصدارة</h3>
+        <div class="tabs" style="margin-bottom:12px">
+          <button class="tab active" onclick="showLeaderboard('students', event)">الطلاب</button>
+          <button class="tab" onclick="showLeaderboard('groups', event)">المجموعات</button>
+        </div>
+        <div id="leaderboard-students"></div>
+        <div id="leaderboard-groups" style="display:none"></div>
+      </div>
+
+      <div id="my-media" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">📸 الصور والفيديوهات المعتمدة لهذا اليوم</h3>
+        <div id="student-media-list" class="grid-2"></div>
+      </div>
+
+      <div id="my-tasks" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">📋 مهامي</h3>
+        <div id="student-tasks-list"></div>
+      </div>
+
+      <div id="notifications-view" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">📢 الإشعارات ورسائل المشرف</h3>
+        <div id="student-notifications"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    const studentSession = JSON.parse(sessionStorage.getItem('studentSession') || 'null');
+    if (!studentSession) window.location.href = 'index.html';
+    const studentId = studentSession ? studentSession.id : '';
+    let currentStudent = studentSession || {};
+    let currentGroupId = studentSession ? (studentSession.groupId || '') : '';
+    let approvedMedia = [];
+    let allTasks = [];
+    let allNotifications = [];
+    let supervisorMessages = [];
+
+    document.getElementById('student-name-header').textContent = 'مرحباً ' + (studentSession ? studentSession.name : '');
+
+    function showStudentTab(id, ev) {
+      document.querySelectorAll('.portal-section').forEach(s => s.style.display = 'none');
+      document.getElementById(id).style.display = 'block';
+      document.querySelectorAll('main > .tabs .tab').forEach(t => t.classList.remove('active'));
+      if (ev && ev.target) ev.target.classList.add('active');
+    }
+
+    function showLeaderboard(type, ev) {
+      document.getElementById('leaderboard-students').style.display = type === 'students' ? 'block' : 'none';
+      document.getElementById('leaderboard-groups').style.display = type === 'groups' ? 'block' : 'none';
+      if (ev && ev.target) {
+        ev.target.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        ev.target.classList.add('active');
+      }
+    }
+
+    if (studentId) {
+      db.collection('students').doc(studentId).onSnapshot(doc => {
+        if (doc.exists) {
+          const s = { id: doc.id, ...doc.data() };
+          currentStudent = s;
+          currentGroupId = s.groupId || '';
+          sessionStorage.setItem('studentSession', JSON.stringify(s));
+          document.getElementById('student-display-name').textContent = s.name || 'طالب';
+          document.getElementById('student-display-code').textContent = s.code || '';
+          document.getElementById('student-points').textContent = s.points || 0;
+          if (s.groupId) {
+            db.collection('groups').doc(s.groupId).get().then(g => {
+              if (g.exists) document.getElementById('student-display-group').textContent = 'المجموعة: ' + (g.data().name || '-');
+            });
+          }
+          renderStudentTasks();
+          renderStudentNotifications();
+        }
+      });
+    }
+
+    db.collection('schedule').orderBy('timeStart').onSnapshot(snap => {
+      const el = document.getElementById('student-schedule');
+      if (snap.empty) { el.innerHTML = '<p style="color:var(--text-muted)">لا يوجد جدول</p>'; return; }
+      el.innerHTML = snap.docs.map(d => {
+        const a = d.data();
+        const icon = a.status === 'ongoing' ? '🟢' : a.status === 'done' ? '✅' : '⏳';
+        return `<div class="card" style="margin-bottom:8px"><div style="display:flex;align-items:center;gap:8px"><span>${icon}</span><div><p style="font-weight:600">${escapeHtml(a.activity || '')}</p><p style="font-size:12px;color:var(--text-muted)">${escapeHtml(a.timeStart || '')} - ${escapeHtml(a.timeEnd || '')} | ${escapeHtml(a.location || '')}</p></div></div></div>`;
+      }).join('');
+    });
+
+    db.collection('students').orderBy('points', 'desc').limit(20).onSnapshot(snap => {
+      const el = document.getElementById('leaderboard-students');
+      el.innerHTML = snap.docs.map((d, i) => {
+        const s = d.data();
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
+        const isMe = d.id === studentId;
+        return `<div class="card" style="margin-bottom:6px;${isMe ? 'border:2px solid var(--primary);background:var(--primary-glow)' : ''}"><div style="display:flex;justify-content:space-between;align-items:center"><span>${medal} ${escapeHtml(s.name || '')} ${isMe ? '(أنت)' : ''}</span><span style="font-weight:700;color:var(--primary)">${s.points || 0}</span></div></div>`;
+      }).join('');
+    });
+
+    db.collection('groups').orderBy('points', 'desc').onSnapshot(snap => {
+      const el = document.getElementById('leaderboard-groups');
+      el.innerHTML = snap.docs.map((d, i) => {
+        const g = d.data();
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
+        return `<div class="card" style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;align-items:center"><span>${medal} ${escapeHtml(g.name || '')}</span><span style="font-weight:700;color:var(--primary)">${g.points || 0}</span></div></div>`;
+      }).join('');
+    });
+
+    db.collection('media').where('status', '==', 'approved').onSnapshot(snap => {
+      approvedMedia = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderStudentMedia();
+    });
+
+    function renderStudentMedia() {
+      const el = document.getElementById('student-media-list');
+      const todayKey = getTodayKey();
+      const docs = approvedMedia
+        .filter(m => m.studentId === studentId && isMediaFromSelectedDate(m, todayKey))
+        .sort(sortByCreatedDesc);
+      if (docs.length === 0) {
+        el.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📸</div><p>لم تتم إضافة صور معتمدة لهذا اليوم بعد</p></div>';
+        return;
+      }
+      el.innerHTML = docs.map(m => {
+        const bestBadge = m.isBestPhoto ? '🏆 أفضل صورة اليوم' : m.isBestVideo ? '🏆 أفضل فيديو اليوم' : '';
+        const preview = m.type === 'image' && m.url
+          ? `<img src="${escapeHtml(m.url)}" class="media-thumb" onerror="this.style.display='none'">`
+          : m.previewUrl
+            ? `<iframe src="${escapeHtml(m.previewUrl)}" style="width:100%;height:240px;border:0;border-radius:16px" allow="autoplay"></iframe>`
+            : '<div style="font-size:48px;text-align:center;margin:20px">🎬</div>';
+        return `<div class="card" style="margin-bottom:8px">
+          ${bestBadge ? `<div class="my-child-badge">${bestBadge}</div>` : ''}
+          ${preview}
+          <p style="font-size:13px;margin-top:8px">${escapeHtml(m.description || 'مشاركة معتمدة')}</p>
+          <p style="font-size:12px;color:var(--text-muted)">${escapeHtml(m.dateKey || todayKey)} — ${escapeHtml(m.timeText || '')}</p>
+        </div>`;
+      }).join('');
+    }
+
+    db.collection('tasks').onSnapshot(snap => {
+      allTasks = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sortByCreatedDesc);
+      renderStudentTasks();
+    });
+
+    function renderStudentTasks() {
+      const myTasks = allTasks.filter(t =>
+        (t.targetType === 'student' && t.targetId === studentId) ||
+        (t.targetType === 'group' && (t.targetId === currentGroupId || t.groupId === currentGroupId))
+      );
+      const el = document.getElementById('student-tasks-list');
+      if (myTasks.length === 0) { el.innerHTML = '<p style="color:var(--text-muted)">لا توجد مهام</p>'; return; }
+      el.innerHTML = myTasks.map(t => {
+        const badge = t.status === 'approved' ? '✅ معتمدة' : t.status === 'done' ? '⏳ بانتظار اعتماد' : t.status === 'in_progress' ? '🔄 قيد التنفيذ' : '🆕 جديدة';
+        const source = t.createdByRole === 'supervisor' ? `من المشرف: ${escapeHtml(t.createdByName || '')}` : 'من الإدارة';
+        return `<div class="card" style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-weight:700">${escapeHtml(t.title || '')}</span><span class="badge-status badge-pending">${badge}</span></div>
+          <p style="font-size:13px;color:var(--text-muted);margin-top:6px">${escapeHtml(t.description || '')}</p>
+          <div class="meta-line"><span>⭐ ${t.points || 0} نقاط</span><span>${source}</span>${t.deadline ? `<span>⏰ ${escapeHtml(t.deadline)}</span>` : ''}</div>
+        </div>`;
+      }).join('');
+    }
+
+    db.collection('notifications').onSnapshot(snap => {
+      allNotifications = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderStudentNotifications();
+    });
+
+    db.collection('messages').where('toRole', '==', 'student').onSnapshot(snap => {
+      supervisorMessages = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderStudentNotifications();
+    });
+
+    function renderStudentNotifications() {
+      const el = document.getElementById('student-notifications');
+      const notifDocs = allNotifications.filter(n =>
+        n.targetType === 'all' ||
+        n.targetType === 'all_students' ||
+        (n.targetType === 'student' && n.targetId === studentId) ||
+        (n.targetType === 'group' && n.targetId === currentGroupId)
+      ).map(n => ({ kind: 'notification', ...n }));
+
+      const msgDocs = supervisorMessages.filter(m =>
+        (m.targetType === 'student' && m.targetId === studentId) ||
+        (m.targetType === 'group' && (m.targetId === currentGroupId || m.groupId === currentGroupId))
+      ).map(m => ({ kind: 'message', ...m }));
+
+      const docs = [...notifDocs, ...msgDocs].sort(sortByCreatedDesc).slice(0, 30);
+      if (docs.length === 0) { el.innerHTML = '<p style="color:var(--text-muted)">لا توجد إشعارات أو رسائل</p>'; return; }
+      el.innerHTML = docs.map(item => {
+        if (item.kind === 'message') {
+          return `<div class="card" style="margin-bottom:8px;border-right:4px solid var(--accent)"><h4 style="font-size:14px;font-weight:800">رسالة من ${escapeHtml(item.fromName || 'المشرف')}</h4><p style="font-size:13px;margin-top:4px">${escapeHtml(item.content || '')}</p><p style="font-size:12px;color:var(--text-muted);margin-top:6px">${escapeHtml(formatDateTimeArabic(item.createdAt))}</p></div>`;
+        }
+        return `<div class="card" style="margin-bottom:8px"><h4 style="font-size:14px;font-weight:700">${escapeHtml(item.title || 'إشعار')}</h4><p style="font-size:13px;margin-top:4px">${escapeHtml(item.message || item.content || '')}</p></div>`;
+      }).join('');
+    }
+  </script>
+</body>
+</html>

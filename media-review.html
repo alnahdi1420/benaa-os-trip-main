@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — مراجعة الإعلام</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a><a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a><a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a><a href="groups.html" class="sidebar-link">👥 المجموعات</a><a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a><a href="location.html" class="sidebar-link">📍 الموقع</a><a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a><a href="media-review.html" class="sidebar-link active">✅ مراجعة الإعلام</a><a href="points.html" class="sidebar-link">⭐ النقاط</a><a href="tasks.html" class="sidebar-link">📋 المهام</a><a href="notifications.html" class="sidebar-link">📢 الإشعارات</a><a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a><a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a><a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a><a href="invoices.html" class="sidebar-link">🧾 الفواتير</a><a href="budget.html" class="sidebar-link">💰 الميزانية</a><a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0"><a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header"><h1>✅ مراجعة واعتماد الإعلام</h1><a class="btn btn-secondary" href="media.html">عرض كل الوسائط والفلاتر</a></div>
+      <div class="grid-2" id="pending-media"></div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="reject-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>سبب الرفض</h3><button class="modal-close" onclick="document.getElementById('reject-modal').classList.remove('active')">&times;</button></div>
+      <input type="hidden" id="reject-id">
+      <div class="form-group"><label>اكتب سبب الرفض</label><textarea id="reject-reason" class="form-control" required placeholder="السبب إجباري..."></textarea></div>
+      <button class="btn btn-danger" style="width:100%" onclick="confirmReject()">تأكيد الرفض</button>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    db.collection('media').where('status', '==', 'pending').onSnapshot(snap => {
+      const container = document.getElementById('pending-media');
+      if (snap.empty) {
+        container.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">✅</div><p>لا توجد مشاركات تنتظر المراجعة</p></div>';
+        return;
+      }
+      const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort(sortByCreatedDesc);
+      container.innerHTML = docs.map(m => {
+        const preview = m.type === 'image'
+          ? `<img src="${escapeHtml(m.url || '')}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<div style=\'display:flex;align-items:center;justify-content:center;height:100%;font-size:48px\'>📸</div>'">`
+          : `<iframe src="${escapeHtml(m.previewUrl || m.url || '')}" style="width:100%;height:100%;border:none" allow="autoplay"></iframe>`;
+        const date = getMediaDateKey(m) || getTodayKey();
+        const time = m.timeText || formatTimeArabic(m.createdAt) || '';
+        return `<div class="card">
+          <div style="height:220px;border-radius:16px;overflow:hidden;margin-bottom:12px;background:var(--surface-2)">${preview}</div>
+          <p style="font-weight:800;margin-bottom:4px">${escapeHtml(m.studentName || 'طالب')}</p>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:6px">${escapeHtml(m.description || 'بدون وصف')}</p>
+          <div class="meta-line"><span>📅 ${escapeHtml(date)}</span><span>🕘 ${escapeHtml(time)}</span><span>${m.type === 'image' ? 'صورة' : 'فيديو'}</span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+            <button class="btn btn-success btn-sm" onclick="approveMedia('${m.id}')">✅ اعتماد</button>
+            <button class="btn btn-danger btn-sm" onclick="openRejectModal('${m.id}')">❌ رفض</button>
+            <button class="btn btn-warning btn-sm" onclick="setBest('${m.id}','${m.type}')">🏆 أفضل ${m.type === 'image' ? 'صورة' : 'فيديو'} لهذا اليوم</button>
+          </div>
+        </div>`;
+      }).join('');
+    });
+
+    const MEDIA_APPROVAL_POINTS = 5;
+    const BEST_MEDIA_BONUS = 10;
+
+    async function awardMediaPoints(mediaId, media, amount, reason, fieldName) {
+      if (!media.studentId || media[fieldName]) return;
+      await db.collection('students').doc(media.studentId).update({ points: firebase.firestore.FieldValue.increment(amount) }).catch(() => {});
+      if (media.groupId) await db.collection('groups').doc(media.groupId).update({ points: firebase.firestore.FieldValue.increment(amount) }).catch(() => {});
+      await db.collection('points').add({
+        studentId: media.studentId,
+        studentName: media.studentName || 'طالب',
+        groupId: media.groupId || '',
+        amount,
+        reason,
+        source: 'media',
+        mediaId,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+
+    async function approveMedia(id) {
+      try {
+        const ref = db.collection('media').doc(id);
+        const doc = await ref.get();
+        if (!doc.exists) return showToast('المشاركة غير موجودة', 'error');
+        const media = doc.data();
+        const dateKey = media.dateKey || getDateKeyFromTimestamp(media.createdAt) || getTodayKey();
+        const timeText = media.timeText || formatTimeArabic(media.createdAt || new Date());
+        await ref.update({
+          status: 'approved', approvedBy: 'admin', approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          points: MEDIA_APPROVAL_POINTS, pointsAwarded: true, dateKey, timeText
+        });
+        await awardMediaPoints(id, media, MEDIA_APPROVAL_POINTS, 'اعتماد مشاركة إعلامية', 'pointsAwarded');
+        await addTimelineEvent(`اعتُمدت مشاركة إعلامية للطالب ${media.studentName || 'طالب'} (+${MEDIA_APPROVAL_POINTS} نقاط)`, 'media');
+        showToast('تم اعتماد المشاركة وإضافة النقاط');
+      } catch (error) {
+        console.error(error);
+        showToast('حدث خطأ أثناء الاعتماد: ' + error.message, 'error');
+      }
+    }
+
+    function openRejectModal(id) {
+      document.getElementById('reject-id').value = id;
+      document.getElementById('reject-reason').value = '';
+      document.getElementById('reject-modal').classList.add('active');
+    }
+
+    async function confirmReject() {
+      const id = document.getElementById('reject-id').value;
+      const reason = document.getElementById('reject-reason').value.trim();
+      if (!reason) return showToast('اكتب سبب الرفض', 'error');
+      await db.collection('media').doc(id).update({ status: 'rejected', rejectionReason: reason, reviewedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      document.getElementById('reject-modal').classList.remove('active');
+      showToast('تم الرفض');
+    }
+
+    async function removePreviousBestBonus(doc, field) {
+      const media = doc.data();
+      if (media.bestPointsAwarded && media.studentId) {
+        await db.collection('students').doc(media.studentId).update({ points: firebase.firestore.FieldValue.increment(-BEST_MEDIA_BONUS) }).catch(() => {});
+        if (media.groupId) await db.collection('groups').doc(media.groupId).update({ points: firebase.firestore.FieldValue.increment(-BEST_MEDIA_BONUS) }).catch(() => {});
+        await db.collection('points').add({
+          studentId: media.studentId,
+          studentName: media.studentName || 'طالب',
+          groupId: media.groupId || '',
+          amount: -BEST_MEDIA_BONUS,
+          reason: field === 'isBestPhoto' ? 'إلغاء أفضل صورة لهذا اليوم' : 'إلغاء أفضل فيديو لهذا اليوم',
+          source: 'media-best-reset', mediaId: doc.id,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      await doc.ref.update({ [field]: false, bestPointsAwarded: false });
+    }
+
+    async function setBest(id, type) {
+      const field = type === 'image' ? 'isBestPhoto' : 'isBestVideo';
+      const label = type === 'image' ? 'أفضل صورة' : 'أفضل فيديو';
+      try {
+        const currentRef = db.collection('media').doc(id);
+        const currentDoc = await currentRef.get();
+        if (!currentDoc.exists) return showToast('المشاركة غير موجودة', 'error');
+        const current = currentDoc.data();
+        const dateKey = current.dateKey || getDateKeyFromTimestamp(current.createdAt) || getTodayKey();
+        const timeText = current.timeText || formatTimeArabic(current.createdAt || new Date());
+
+        const prev = await db.collection('media').where(field, '==', true).get();
+        for (const prevDoc of prev.docs) {
+          const prevData = prevDoc.data();
+          if (prevDoc.id !== id && isMediaFromSelectedDate(prevData, dateKey)) await removePreviousBestBonus(prevDoc, field);
+        }
+
+        await currentRef.update({
+          [field]: true, bestDateKey: dateKey,
+          status: 'approved', approvedBy: 'admin', approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          points: MEDIA_APPROVAL_POINTS, pointsAwarded: true,
+          bestPoints: BEST_MEDIA_BONUS, bestPointsAwarded: true,
+          bestAt: firebase.firestore.FieldValue.serverTimestamp(), dateKey, timeText
+        });
+
+        await awardMediaPoints(id, current, MEDIA_APPROVAL_POINTS, 'اعتماد مشاركة إعلامية', 'pointsAwarded');
+        await awardMediaPoints(id, current, BEST_MEDIA_BONUS, `${label} لهذا اليوم`, 'bestPointsAwarded');
+        await addTimelineEvent(`اختيرت مشاركة الطالب ${current.studentName || 'طالب'} كـ ${label} ليوم ${dateKey} (+${BEST_MEDIA_BONUS} نقاط إضافية)`, 'media');
+        showToast(`تم اختيارها كـ ${label} ليوم ${dateKey}`);
+      } catch (error) {
+        console.error(error);
+        showToast('حدث خطأ أثناء اختيار الأفضل: ' + error.message, 'error');
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — الطلاب</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a>
+      <a href="students.html" class="sidebar-link active">👨‍🎓 الطلاب</a>
+      <a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a>
+      <a href="groups.html" class="sidebar-link">👥 المجموعات</a>
+      <a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a>
+      <a href="location.html" class="sidebar-link">📍 الموقع</a>
+      <a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a>
+      <a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a>
+      <a href="points.html" class="sidebar-link">⭐ النقاط</a>
+      <a href="tasks.html" class="sidebar-link">📋 المهام</a>
+      <a href="notifications.html" class="sidebar-link">📢 الإشعارات</a>
+      <a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a>
+      <a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a>
+      <a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a>
+      <a href="invoices.html" class="sidebar-link">🧾 الفواتير</a>
+      <a href="budget.html" class="sidebar-link">💰 الميزانية</a>
+      <a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0">
+      <a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>👨‍🎓 إدارة الطلاب</h1>
+        <button class="btn btn-primary" onclick="openAddModal()">+ إضافة طالب</button>
+      </div>
+
+      <div class="filters">
+        <input type="text" id="search-input" class="form-control" placeholder="🔍 بحث بالاسم أو الكود..." style="max-width:280px" oninput="filterStudents()">
+        <select id="filter-group" class="filter-select" onchange="filterStudents()"><option value="">كل المجموعات</option></select>
+        <select id="filter-supervisor" class="filter-select" onchange="filterStudents()"><option value="">كل المشرفين</option></select>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr><th>الكود</th><th>الاسم</th><th>المجموعة</th><th>المشرف</th><th>النقاط</th><th>جوال ولي الأمر</th><th>إجراءات</th></tr>
+          </thead>
+          <tbody id="students-table"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div class="modal-overlay" id="student-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">إضافة طالب</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <form id="student-form" onsubmit="saveStudent(event)">
+        <input type="hidden" id="student-id">
+        <div class="form-group">
+          <label>اسم الطالب</label>
+          <input type="text" id="student-name" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>المجموعة</label>
+          <select id="student-group" class="form-control" required></select>
+        </div>
+        <div class="form-group">
+          <label>المشرف</label>
+          <select id="student-supervisor" class="form-control" required></select>
+        </div>
+        <div class="form-group">
+          <label>رقم جوال ولي الأمر</label>
+          <input type="tel" id="student-phone" class="form-control" placeholder="05XXXXXXXX">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    let allStudents = [], allGroups = [], allSupervisors = [];
+
+    // Load groups for dropdowns
+    db.collection('groups').onSnapshot(snap => {
+      allGroups = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const sel = document.getElementById('filter-group');
+      const formSel = document.getElementById('student-group');
+      sel.innerHTML = '<option value="">كل المجموعات</option>' + allGroups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+      formSel.innerHTML = '<option value="">اختر المجموعة</option>' + allGroups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+    });
+
+    // Load supervisors for dropdowns
+    db.collection('supervisors').onSnapshot(snap => {
+      allSupervisors = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const sel = document.getElementById('filter-supervisor');
+      const formSel = document.getElementById('student-supervisor');
+      sel.innerHTML = '<option value="">كل المشرفين</option>' + allSupervisors.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      formSel.innerHTML = '<option value="">اختر المشرف</option>' + allSupervisors.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    });
+
+    // Load students
+    db.collection('students').orderBy('createdAt', 'desc').onSnapshot(snap => {
+      allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      filterStudents();
+    });
+
+    function filterStudents() {
+      const search = document.getElementById('search-input').value.toLowerCase();
+      const groupFilter = document.getElementById('filter-group').value;
+      const supFilter = document.getElementById('filter-supervisor').value;
+      
+      let filtered = allStudents.filter(s => {
+        if (search && !s.name.toLowerCase().includes(search) && !(s.code || '').toLowerCase().includes(search)) return false;
+        if (groupFilter && s.groupId !== groupFilter) return false;
+        if (supFilter && s.supervisorId !== supFilter) return false;
+        return true;
+      });
+
+      const tbody = document.getElementById('students-table');
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">لا يوجد طلاب</td></tr>';
+        return;
+      }
+      tbody.innerHTML = filtered.map(s => {
+        const group = allGroups.find(g => g.id === s.groupId);
+        const sup = allSupervisors.find(sp => sp.id === s.supervisorId);
+        return `<tr>
+          <td><code style="background:var(--primary-glow);padding:2px 8px;border-radius:4px">${s.code || '-'}</code></td>
+          <td style="font-weight:600">${s.name}</td>
+          <td>${group ? group.name : '-'}</td>
+          <td>${sup ? sup.name : '-'}</td>
+          <td style="font-weight:700;color:var(--primary)">${s.points || 0}</td>
+          <td>${s.phone || '-'}</td>
+          <td>
+            <button class="btn btn-sm btn-secondary" onclick="editStudent('${s.id}')">تعديل</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteStudent('${s.id}','${s.name}')">حذف</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function openAddModal() {
+      document.getElementById('modal-title').textContent = 'إضافة طالب';
+      document.getElementById('student-form').reset();
+      document.getElementById('student-id').value = '';
+      document.getElementById('student-modal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('student-modal').classList.remove('active');
+    }
+
+    function editStudent(id) {
+      const s = allStudents.find(st => st.id === id);
+      if (!s) return;
+      document.getElementById('modal-title').textContent = 'تعديل طالب';
+      document.getElementById('student-id').value = id;
+      document.getElementById('student-name').value = s.name;
+      document.getElementById('student-group').value = s.groupId || '';
+      document.getElementById('student-supervisor').value = s.supervisorId || '';
+      document.getElementById('student-phone').value = s.phone || '';
+      document.getElementById('student-modal').classList.add('active');
+    }
+
+    async function saveStudent(e) {
+      e.preventDefault();
+      const id = document.getElementById('student-id').value;
+      const data = {
+        name: document.getElementById('student-name').value.trim(),
+        groupId: document.getElementById('student-group').value,
+        supervisorId: document.getElementById('student-supervisor').value,
+        phone: document.getElementById('student-phone').value.trim()
+      };
+
+      try {
+        if (id) {
+          await db.collection('students').doc(id).update(data);
+          showToast('تم تحديث بيانات الطالب');
+        } else {
+          // Generate code
+          const count = allStudents.length + 1;
+          data.code = 'STD-' + String(count).padStart(4, '0');
+          data.points = 0;
+          data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          await db.collection('students').add(data);
+          showToast('تمت إضافة الطالب بنجاح');
+        }
+        closeModal();
+      } catch(err) {
+        showToast('حدث خطأ: ' + err.message, 'error');
+      }
+    }
+
+    async function deleteStudent(id, name) {
+      if (!confirm(`هل تريد حذف الطالب "${name}"؟`)) return;
+      try {
+        await db.collection('students').doc(id).delete();
+        showToast('تم حذف الطالب');
+      } catch(err) {
+        showToast('خطأ في الحذف', 'error');
+      }
+    }
+  </script>
+</body>
+</html>

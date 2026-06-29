@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — تقرير اليوم</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a><a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a><a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a><a href="groups.html" class="sidebar-link">👥 المجموعات</a><a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a><a href="location.html" class="sidebar-link">📍 الموقع</a><a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a><a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a><a href="points.html" class="sidebar-link">⭐ النقاط</a><a href="tasks.html" class="sidebar-link">📋 المهام</a><a href="notifications.html" class="sidebar-link">📢 الإشعارات</a><a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a><a href="daily-report.html" class="sidebar-link active">📄 تقرير اليوم</a><a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a><a href="invoices.html" class="sidebar-link">🧾 الفواتير</a><a href="budget.html" class="sidebar-link">💰 الميزانية</a><a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0"><a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header">
+        <div><h1>📄 تقرير اليوم</h1><p style="color:var(--text-muted);font-size:13px">التقرير يعرض وسائط التاريخ المحدد فقط</p></div>
+        <button class="btn btn-primary" onclick="window.print()">🖨️ طباعة</button>
+      </div>
+
+      <div class="card" style="margin-bottom:20px;max-width:420px">
+        <div class="form-group" style="margin-bottom:0"><label>اختر تاريخ التقرير</label><input type="date" id="report-date" class="form-control" onchange="changeReportDate()"></div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon">📸</div><div class="stat-number" id="today-media">0</div><div class="stat-label">مشاركات معتمدة في التاريخ المحدد</div></div>
+        <div class="stat-card accent"><div class="stat-icon">⭐</div><div class="stat-number" id="today-top-student">-</div><div class="stat-label">أكثر الطلاب نقاطاً في التاريخ المحدد</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3 style="font-weight:700;margin-bottom:12px">🏆 أفضل صورة للتاريخ المحدد</h3>
+          <div id="best-photo" style="text-align:center;color:var(--text-muted)">لم تُحدد بعد</div>
+        </div>
+        <div class="card">
+          <h3 style="font-weight:700;margin-bottom:12px">🎬 أفضل فيديو للتاريخ المحدد</h3>
+          <div id="best-video" style="text-align:center;color:var(--text-muted)">لم يُحدد بعد</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <h3 style="font-weight:700;margin-bottom:12px">📸 وسائط التاريخ المحدد</h3>
+        <div class="grid-3" id="report-media-list"></div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <h3 style="font-weight:700;margin-bottom:12px">🏆 المجموعة الأولى</h3>
+        <div id="top-group" style="font-size:18px;font-weight:700;color:var(--primary)">-</div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <h3 style="font-weight:700;margin-bottom:12px">📅 الأنشطة المنتهية</h3>
+        <div id="today-activities"></div>
+      </div>
+
+      <div class="card" style="margin-top:20px">
+        <h3 style="font-weight:700;margin-bottom:12px">📝 ملخص اليوم</h3>
+        <textarea id="daily-summary" class="form-control" rows="4" placeholder="اكتب ملخص اليوم هنا..."></textarea>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="saveSummary()">💾 حفظ الملخص</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    let selectedDateKey = getTodayKey();
+    let approvedMedia = [];
+    let allPoints = [];
+    document.getElementById('report-date').value = selectedDateKey;
+
+    function changeReportDate() {
+      selectedDateKey = document.getElementById('report-date').value || getTodayKey();
+      renderReportMedia();
+      renderBestMedia();
+      renderTopStudent();
+      loadSavedSummary();
+    }
+
+    db.collection('media').where('status', '==', 'approved').onSnapshot(snap => {
+      approvedMedia = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sortByCreatedDesc);
+      renderReportMedia();
+      renderBestMedia();
+    });
+
+    function renderReportMedia() {
+      const list = document.getElementById('report-media-list');
+      const todayMedia = approvedMedia.filter(m => isMediaFromSelectedDate(m, selectedDateKey));
+      document.getElementById('today-media').textContent = todayMedia.length;
+      if (todayMedia.length === 0) {
+        list.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📸</div><p>لا توجد وسائط معتمدة لهذا التاريخ</p></div>';
+        return;
+      }
+      list.innerHTML = todayMedia.map(m => {
+        const preview = m.type === 'image' && m.url ? `<img src="${escapeHtml(m.url)}" class="media-thumb" onerror="this.style.display='none'">` : m.previewUrl ? `<iframe src="${escapeHtml(m.previewUrl)}" style="width:100%;height:210px;border:0;border-radius:16px" allow="autoplay"></iframe>` : '<div style="font-size:48px;text-align:center">🎬</div>';
+        const best = m.isBestPhoto ? '🏆 أفضل صورة' : m.isBestVideo ? '🏆 أفضل فيديو' : '';
+        return `<div class="card">
+          ${best ? `<div class="my-child-badge">${best}</div>` : ''}
+          ${preview}
+          <p style="font-weight:800;margin-top:8px">${escapeHtml(m.studentName || '')}</p>
+          <p style="font-size:12px;color:var(--text-muted)">${escapeHtml(m.description || '')}</p>
+          <div class="meta-line"><span>📅 ${escapeHtml(getMediaDateKey(m) || '')}</span><span>🕘 ${escapeHtml(m.timeText || '')}</span></div>
+        </div>`;
+      }).join('');
+    }
+
+    function renderBestMedia() {
+      const bestPhoto = approvedMedia.find(m => m.isBestPhoto && isMediaFromSelectedDate(m, selectedDateKey));
+      const bestVideo = approvedMedia.find(m => m.isBestVideo && isMediaFromSelectedDate(m, selectedDateKey));
+      const photoEl = document.getElementById('best-photo');
+      const videoEl = document.getElementById('best-video');
+      photoEl.innerHTML = bestPhoto ? `<img src="${escapeHtml(bestPhoto.url || '')}" style="max-width:100%;border-radius:12px;max-height:220px"><p style="margin-top:8px;font-weight:700">${escapeHtml(bestPhoto.studentName || '')}</p>` : 'لم تُحدد بعد';
+      videoEl.innerHTML = bestVideo ? (bestVideo.previewUrl ? `<iframe src="${escapeHtml(bestVideo.previewUrl)}" style="width:100%;height:220px;border:0;border-radius:12px" allow="autoplay"></iframe>` : '<div style="font-size:48px">🎬</div>') + `<p style="margin-top:8px;font-weight:700">${escapeHtml(bestVideo.studentName || '')}</p>` : 'لم يُحدد بعد';
+    }
+
+    db.collection('groups').orderBy('points', 'desc').limit(1).onSnapshot(snap => {
+      if (!snap.empty) {
+        const g = snap.docs[0].data();
+        document.getElementById('top-group').textContent = `${g.name || '-'} — ${g.points || 0} نقطة`;
+      }
+    });
+
+    db.collection('schedule').where('status', '==', 'done').onSnapshot(snap => {
+      const el = document.getElementById('today-activities');
+      if (snap.empty) { el.innerHTML = '<p style="color:var(--text-muted)">لا توجد أنشطة منتهية</p>'; return; }
+      el.innerHTML = snap.docs.map(d => `<p style="padding:8px 0;border-bottom:1px solid var(--border)">✅ ${escapeHtml(d.data().activity || '')}</p>`).join('');
+    });
+
+    db.collection('points').onSnapshot(snap => {
+      allPoints = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderTopStudent();
+    });
+
+    function renderTopStudent() {
+      const todayPoints = {};
+      allPoints.forEach(p => {
+        const key = getDateKeyFromTimestamp(p.createdAt);
+        if (key === selectedDateKey) todayPoints[p.studentName || 'طالب'] = (todayPoints[p.studentName || 'طالب'] || 0) + (p.amount || 0);
+      });
+      const sorted = Object.entries(todayPoints).sort((a,b) => b[1] - a[1]);
+      document.getElementById('today-top-student').textContent = sorted.length > 0 ? sorted[0][0] : '-';
+    }
+
+    function loadSavedSummary() {
+      document.getElementById('daily-summary').value = '';
+      db.collection('daily-reports').doc(selectedDateKey).get().then(doc => {
+        if (doc.exists) document.getElementById('daily-summary').value = doc.data().summary || '';
+      });
+    }
+
+    async function saveSummary() {
+      await db.collection('daily-reports').doc(selectedDateKey).set({
+        summary: document.getElementById('daily-summary').value,
+        date: selectedDateKey,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      showToast('تم حفظ الملخص');
+    }
+
+    loadSavedSummary();
+  </script>
+</body>
+</html>

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — تسجيل الدخول</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="login-container">
+    <div class="login-card">
+      <div class="login-brand"><img src="assets/logo.png" alt="شعار الجمعية" class="login-logo"><h1>Benaa OS</h1><p>نظام إدارة الرحلات الطلابية</p></div>
+      
+      <div class="tabs" style="margin: 0 auto 24px; justify-content: center;">
+        <button class="tab active" onclick="switchTab('admin', event)">الإدارة</button>
+        <button class="tab" onclick="switchTab('supervisor', event)">المشرف</button>
+        <button class="tab" onclick="switchTab('student', event)">الطالب</button>
+        <button class="tab" onclick="switchTab('parent', event)">ولي الأمر</button>
+      </div>
+
+      <!-- Admin Login -->
+      <div id="tab-admin" class="login-form">
+        <div class="form-group">
+          <label>كلمة مرور الإدارة</label>
+          <input type="password" id="admin-password" class="form-control" placeholder="أدخل كلمة المرور">
+        </div>
+        <button class="btn btn-primary btn-lg" style="width:100%" onclick="loginAdmin()">دخول الإدارة</button>
+      </div>
+
+      <!-- Supervisor Login -->
+      <div id="tab-supervisor" class="login-form" style="display:none">
+        <div class="form-group">
+          <label>كود المشرف</label>
+          <input type="text" id="sup-code" class="form-control" placeholder="مثال: SUP-001">
+        </div>
+        <button class="btn btn-primary btn-lg" style="width:100%" onclick="loginSupervisor()">دخول المشرف</button>
+      </div>
+
+      <!-- Student Login -->
+      <div id="tab-student" class="login-form" style="display:none">
+        <div class="form-group">
+          <label>كود الطالب</label>
+          <input type="text" id="std-code" class="form-control" placeholder="مثال: STD-0001">
+        </div>
+        <button class="btn btn-primary btn-lg" style="width:100%" onclick="loginStudent()">دخول الطالب</button>
+      </div>
+
+      <!-- Parent Login -->
+      <div id="tab-parent" class="login-form" style="display:none">
+        <div class="form-group">
+          <label>رقم الجوال</label>
+          <input type="tel" id="parent-phone" class="form-control" placeholder="05XXXXXXXX">
+        </div>
+        <button class="btn btn-primary btn-lg" style="width:100%" onclick="loginParent()">دخول ولي الأمر</button>
+      </div>
+
+      <div id="login-error" style="color:var(--danger);margin-top:16px;font-weight:600;display:none"></div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script>
+    function switchTab(tab, ev) {
+      document.querySelectorAll('.login-form').forEach(f => f.style.display = 'none');
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('tab-' + tab).style.display = 'block';
+      if (ev && ev.target) ev.target.classList.add('active');
+      document.getElementById('login-error').style.display = 'none';
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('login-error');
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    async function loginAdmin() {
+      const pass = document.getElementById('admin-password').value.trim();
+      if (!pass) return showError('أدخل كلمة المرور');
+      try {
+        const doc = await db.collection('settings').doc('login').get();
+        if (doc.exists && doc.data().adminPass === pass) {
+          sessionStorage.setItem('adminSession', 'true');
+          window.location.href = 'dashboard.html';
+        } else {
+          // Fallback: try default password
+          if (pass === 'admin123') {
+            sessionStorage.setItem('adminSession', 'true');
+            window.location.href = 'dashboard.html';
+          } else {
+            showError('كلمة المرور غير صحيحة');
+          }
+        }
+      } catch(e) {
+        // If Firebase not configured, allow default login
+        if (pass === 'admin123') {
+          sessionStorage.setItem('adminSession', 'true');
+          window.location.href = 'dashboard.html';
+        } else {
+          showError('خطأ في الاتصال — تأكد من إعدادات Firebase أو استخدم: admin123');
+        }
+      }
+    }
+
+    async function loginSupervisor() {
+      const code = document.getElementById('sup-code').value.trim().toUpperCase();
+      if (!code) return showError('أدخل كود المشرف');
+      try {
+        const snap = await db.collection('supervisors').where('code', '==', code).get();
+        if (!snap.empty) {
+          const supData = { id: snap.docs[0].id, ...snap.docs[0].data() };
+          sessionStorage.setItem('supSession', JSON.stringify(supData));
+          window.location.href = 'supervisor-portal.html';
+        } else {
+          showError('كود المشرف غير موجود');
+        }
+      } catch(e) {
+        showError('خطأ في الاتصال');
+      }
+    }
+
+    async function loginStudent() {
+      const code = document.getElementById('std-code').value.trim().toUpperCase();
+      if (!code) return showError('أدخل كود الطالب');
+      try {
+        const snap = await db.collection('students').where('code', '==', code).get();
+        if (!snap.empty) {
+          const studentData = { id: snap.docs[0].id, ...snap.docs[0].data() };
+          sessionStorage.setItem('studentSession', JSON.stringify(studentData));
+          window.location.href = 'student.html';
+        } else {
+          showError('كود الطالب غير موجود');
+        }
+      } catch(e) {
+        showError('خطأ في الاتصال');
+      }
+    }
+
+    async function loginParent() {
+      const rawPhone = document.getElementById('parent-phone').value.trim();
+      if (!rawPhone) return showError('أدخل رقم الجوال');
+
+      try {
+        const phone = normalizePhone(rawPhone);
+        const variants = [...new Set([rawPhone, phone, phone.replace(/^0/, ''), phone.startsWith('0') ? '966' + phone.slice(1) : ''])].filter(Boolean);
+        const found = new Map();
+
+        // ندعم أكثر من صيغة رقم حتى لا يمنع اختلاف بسيط في الإدخال ولي الأمر من الدخول.
+        for (const v of variants) {
+          const snap = await db.collection('students').where('phone', '==', v).get();
+          snap.docs.forEach(doc => found.set(doc.id, { id: doc.id, ...doc.data() }));
+        }
+
+        const children = Array.from(found.values()).map(s => ({
+          id: s.id,
+          name: s.name || 'طالب',
+          groupId: s.groupId || '',
+          supervisorId: s.supervisorId || '',
+          code: s.code || '',
+          points: s.points || 0
+        }));
+
+        if (children.length === 0) {
+          showError('رقم الجوال غير مسجل — تأكد من تسجيله في بيانات الطالب');
+          return;
+        }
+
+        const parentSession = {
+          phone,
+          parentName: 'ولي الأمر',
+          children,
+          selectedStudentId: children[0].id,
+          // مفاتيح قديمة للإبقاء على توافق الصفحات القديمة إن وجدت
+          studentId: children[0].id,
+          studentName: children[0].name
+        };
+
+        sessionStorage.setItem('parentSession', JSON.stringify(parentSession));
+        window.location.href = 'parent.html';
+      } catch(e) {
+        console.error(e);
+        showError('خطأ في الاتصال');
+      }
+    }
+
+    // Enter key support
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const adminTab = document.getElementById('tab-admin');
+        const supTab = document.getElementById('tab-supervisor');
+        const stdTab = document.getElementById('tab-student');
+        const parentTab = document.getElementById('tab-parent');
+        if (adminTab.style.display !== 'none' && !adminTab.hasAttribute('style')) loginAdmin();
+        else if (supTab.style.display === 'block') loginSupervisor();
+        else if (stdTab.style.display === 'block') loginStudent();
+        else if (parentTab.style.display === 'block') loginParent();
+        else { const visible = document.querySelector('.login-form:not([style*="none"])'); if (visible) visible.querySelector('.btn').click(); }
+      }
+    });
+  </script>
+</body>
+</html>

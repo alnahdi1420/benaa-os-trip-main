@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — بوابة ولي الأمر</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="portal-layout">
+    <header class="portal-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <img src="assets/logo.png" alt="شعار الجمعية" class="portal-logo">
+        <div><h2 style="font-size:16px;font-weight:700">بوابة ولي الأمر</h2><p style="font-size:12px;color:rgba(255,255,255,.82)" id="parent-header-info">مرحباً</p></div>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="sessionStorage.clear();location.href='index.html'">خروج</button>
+    </header>
+
+    <main class="portal-content">
+      <div id="child-selector-wrap"></div>
+
+      <div class="card soft-card" style="color:var(--text);margin-bottom:20px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+          <div>
+            <h2 id="child-name" style="font-size:20px;font-weight:800">ابني</h2>
+            <p id="child-group" style="color:var(--text-muted);font-size:13px">-</p>
+            <p id="child-supervisor" style="color:var(--text-muted);font-size:13px">-</p>
+          </div>
+          <div style="text-align:center">
+            <div id="child-points" style="font-size:36px;font-weight:900;color:var(--primary)">0</div>
+            <div style="font-size:13px;color:var(--text-muted)">نقاطه</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tabs parent-tabs" style="margin-bottom:20px">
+        <button type="button" class="tab active" data-parent-tab="overview">نظرة عامة</button>
+        <button type="button" class="tab" data-parent-tab="location-view">الموقع</button>
+        <button type="button" class="tab" data-parent-tab="child-media">إعلام اليوم</button>
+        <button type="button" class="tab" data-parent-tab="parent-notifications">إشعارات</button>
+        <button type="button" class="tab" data-parent-tab="contact-admin">تواصل</button>
+      </div>
+
+      <div id="overview" class="portal-section">
+        <div class="grid-2">
+          <div class="card">
+            <h3 style="font-weight:700;font-size:14px;margin-bottom:12px">📅 النشاط الحالي</h3>
+            <div id="current-activity" style="font-size:14px;color:var(--text-muted)">لا يوجد نشاط جاري</div>
+          </div>
+          <div class="card">
+            <h3 style="font-weight:700;font-size:14px;margin-bottom:12px">🏆 ترتيب المجموعة</h3>
+            <div id="group-rank" style="font-size:24px;font-weight:800;color:var(--primary)">-</div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <h3 style="font-weight:700;font-size:14px;margin-bottom:12px">⭐ آخر النقاط المكتسبة</h3>
+          <div id="recent-points"></div>
+        </div>
+      </div>
+
+      <div id="location-view" class="portal-section" style="display:none">
+        <div class="card">
+          <h3 style="font-weight:700;margin-bottom:16px">📍 موقع الرحلة الحالي</h3>
+          <div id="trip-location"><p style="color:var(--text-muted)">لم يتم تحديث موقع الرحلة بعد</p></div>
+        </div>
+      </div>
+
+      <div id="child-media" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">📸 صور وفيديوهات اليوم للابن المحدد</h3>
+        <div id="child-media-list" class="grid-2"></div>
+      </div>
+
+      <div id="parent-notifications" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">📢 الإشعارات</h3>
+        <div id="parent-notif-list"></div>
+      </div>
+
+      <div id="contact-admin" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">💬 تواصل</h3>
+        <div class="card" style="max-width:640px;margin-bottom:16px">
+          <div class="form-group">
+            <label>الجهة المستقبلة</label>
+            <select id="parent-msg-target" class="form-control" onchange="updateContactHint()">
+              <option value="admin">الإدارة العامة</option>
+              <option value="supervisor">مشرف الابن الحالي</option>
+            </select>
+            <p id="contact-hint" style="font-size:12px;color:var(--text-muted);margin-top:6px">سيتم إرسال الرسالة للإدارة العامة.</p>
+          </div>
+          <div class="form-group"><textarea id="parent-msg" class="form-control" placeholder="اكتب رسالتك هنا..." rows="3"></textarea></div>
+          <button class="btn btn-primary" onclick="sendParentMessage()">إرسال</button>
+        </div>
+        <div id="parent-messages-list"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    const parentSession = getCurrentParentSession();
+    if (!parentSession) window.location.href = 'index.html';
+
+    let selectedStudentId = (getCurrentParentChild() || {}).id || '';
+    let currentChild = getCurrentParentChild();
+    let currentGroupName = '-';
+    let currentSupervisorName = '-';
+    let allApprovedMedia = [];
+    let allNotifications = [];
+    let allGroupsRanking = [];
+    let childUnsubs = [];
+
+    document.getElementById('parent-header-info').textContent = (parentSession.children || []).length > 1 ? 'يمكنك متابعة أكثر من ابن' : 'ولي أمر الطالب';
+
+    document.querySelectorAll('.parent-tabs .tab').forEach(button => {
+      button.addEventListener('click', () => {
+        const targetId = button.getAttribute('data-parent-tab');
+        document.querySelectorAll('.portal-section').forEach(section => section.style.display = 'none');
+        document.getElementById(targetId).style.display = 'block';
+        document.querySelectorAll('.parent-tabs .tab').forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+      });
+    });
+
+    function renderChildSelector() {
+      const children = parentSession.children || [];
+      const wrap = document.getElementById('child-selector-wrap');
+      if (children.length <= 1) { wrap.innerHTML = ''; return; }
+      wrap.innerHTML = `
+        <div class="card child-selector-card">
+          <label style="display:block;font-weight:800;margin-bottom:8px">اختر الابن</label>
+          <select class="form-control" id="child-selector" onchange="selectChild(this.value)">
+            ${children.map(c => `<option value="${c.id}" ${c.id === selectedStudentId ? 'selected' : ''}>${escapeHtml(c.name)} — ${escapeHtml(c.code || '')}</option>`).join('')}
+          </select>
+        </div>`;
+    }
+
+    function stopChildSubscriptions() {
+      childUnsubs.forEach(unsub => { try { if (typeof unsub === 'function') unsub(); } catch (_) {} });
+      childUnsubs = [];
+    }
+
+    function selectChild(id) {
+      if (!id || id === selectedStudentId) return;
+      selectedStudentId = id;
+      saveCurrentParentChild(id);
+      currentChild = getCurrentParentChild();
+      stopChildSubscriptions();
+      bindSelectedChild();
+      renderChildSelector();
+      renderParentMedia();
+      renderParentNotifications();
+      updateGroupRank();
+      updateContactHint();
+    }
+
+    async function bindSelectedChild() {
+      if (!selectedStudentId) return;
+      const studentUnsub = db.collection('students').doc(selectedStudentId).onSnapshot(async doc => {
+        if (!doc.exists) return;
+        const s = { id: doc.id, ...doc.data() };
+        currentChild = s;
+        const session = getCurrentParentSession();
+        if (session && Array.isArray(session.children)) {
+          session.children = session.children.map(c => c.id === s.id ? { ...c, name: s.name || c.name, groupId: s.groupId || '', supervisorId: s.supervisorId || '', code: s.code || '', points: s.points || 0 } : c);
+          session.selectedStudentId = s.id;
+          session.studentId = s.id;
+          session.studentName = s.name || '';
+          sessionStorage.setItem('parentSession', JSON.stringify(session));
+        }
+        document.getElementById('child-name').textContent = s.name || 'طالب';
+        document.getElementById('child-points').textContent = s.points || 0;
+        currentGroupName = '-'; currentSupervisorName = '-';
+        if (s.groupId) {
+          const g = await db.collection('groups').doc(s.groupId).get().catch(() => null);
+          currentGroupName = g && g.exists ? (g.data().name || '-') : '-';
+        }
+        if (s.supervisorId) {
+          const sp = await db.collection('supervisors').doc(s.supervisorId).get().catch(() => null);
+          currentSupervisorName = sp && sp.exists ? (sp.data().name || '-') : '-';
+        }
+        document.getElementById('child-group').textContent = 'المجموعة: ' + currentGroupName;
+        document.getElementById('child-supervisor').textContent = 'المشرف: ' + currentSupervisorName;
+        renderParentMedia();
+        renderParentNotifications();
+        updateGroupRank();
+        updateContactHint();
+      });
+      childUnsubs.push(studentUnsub);
+
+      const pointsUnsub = db.collection('points').where('studentId', '==', selectedStudentId).onSnapshot(snap => {
+        const el = document.getElementById('recent-points');
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sortByCreatedDesc).slice(0, 5);
+        if (docs.length === 0) { el.innerHTML = '<p style="color:var(--text-muted)">لا توجد نقاط بعد</p>'; return; }
+        el.innerHTML = docs.map(p => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)"><span>${escapeHtml(p.reason || 'نقاط')}</span><span style="font-weight:700;color:var(--success)">+${p.amount || 0}</span></div>`).join('');
+      });
+      childUnsubs.push(pointsUnsub);
+
+      const messagesUnsub = db.collection('messages').where('studentId', '==', selectedStudentId).onSnapshot(snap => {
+        renderParentMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      });
+      childUnsubs.push(messagesUnsub);
+    }
+
+    db.collection('media').where('status', '==', 'approved').onSnapshot(snap => {
+      allApprovedMedia = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderParentMedia();
+    });
+
+    function renderParentMedia() {
+      const el = document.getElementById('child-media-list');
+      if (!el || !selectedStudentId) return;
+      const todayKey = getTodayKey();
+      const docs = allApprovedMedia
+        .filter(m => m.studentId === selectedStudentId && isMediaFromSelectedDate(m, todayKey))
+        .sort(sortByCreatedDesc);
+      if (docs.length === 0) {
+        el.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📸</div><p>لم تتم إضافة صور معتمدة لهذا اليوم بعد</p></div>';
+        return;
+      }
+      el.innerHTML = docs.map(m => {
+        const bestBadge = m.isBestPhoto ? '🏆 أفضل صورة اليوم' : m.isBestVideo ? '🏆 أفضل فيديو اليوم' : '';
+        const preview = m.type === 'image' && m.url
+          ? `<img src="${escapeHtml(m.url)}" class="media-thumb" onerror="this.style.display='none'">`
+          : m.previewUrl
+            ? `<iframe src="${escapeHtml(m.previewUrl)}" style="width:100%;height:240px;border:0;border-radius:16px" allow="autoplay"></iframe>`
+            : '<div style="font-size:48px;text-align:center;margin:20px">🎬</div>';
+        return `<div class="card my-child-media">
+          ${bestBadge ? `<div class="my-child-badge">${bestBadge}</div>` : '<div class="my-child-badge">مشاركة الابن المحدد</div>'}
+          ${preview}
+          <p style="font-size:13px;margin-top:8px">${escapeHtml(m.description || 'بدون وصف')}</p>
+          <p style="font-size:12px;color:var(--text-muted)">${escapeHtml(m.dateKey || todayKey)} — ${escapeHtml(m.timeText || '')}</p>
+        </div>`;
+      }).join('');
+    }
+
+    db.collection('schedule').where('status', '==', 'ongoing').onSnapshot(snap => {
+      const el = document.getElementById('current-activity');
+      if (!snap.empty) {
+        const a = snap.docs[0].data();
+        el.innerHTML = `<p style="font-weight:700;color:var(--primary)">${escapeHtml(a.activity || '')}</p><p style="font-size:12px;color:var(--text-muted)">${escapeHtml(a.location || '')} | ${escapeHtml(a.timeStart || '')} - ${escapeHtml(a.timeEnd || '')}</p>`;
+      } else {
+        el.innerHTML = 'لا يوجد نشاط جاري';
+      }
+    });
+
+    db.collection('groups').orderBy('points', 'desc').onSnapshot(snap => {
+      allGroupsRanking = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      updateGroupRank();
+    });
+
+    function updateGroupRank() {
+      const groupId = currentChild && currentChild.groupId;
+      const rank = allGroupsRanking.findIndex(g => g.id === groupId) + 1;
+      document.getElementById('group-rank').textContent = rank > 0 ? '#' + rank : '-';
+    }
+
+    db.collection('location').doc('current').onSnapshot(doc => {
+      const el = document.getElementById('trip-location');
+      if (!doc.exists) {
+        el.innerHTML = '<p style="color:var(--text-muted)">لم يتم تحديث موقع الرحلة بعد</p>';
+        return;
+      }
+      const loc = doc.data();
+      const updated = loc.updatedAtText || formatDateTimeArabic(loc.updatedAt) || 'غير محدد';
+      el.innerHTML = `
+        <p style="font-size:18px;font-weight:800;margin-bottom:8px">${escapeHtml(loc.label || loc.name || 'موقع غير محدد')}</p>
+        ${loc.description ? `<p style="font-size:14px;margin-bottom:8px">${escapeHtml(loc.description)}</p>` : ''}
+        ${loc.url ? `<a href="${escapeHtml(loc.url)}" target="_blank" class="btn btn-primary" style="margin-bottom:8px">🗺️ فتح الموقع على الخريطة</a>` : ''}
+        <p style="font-size:13px;color:var(--text-muted)">آخر تحديث: ${escapeHtml(updated)}</p>
+        <p style="font-size:13px;color:var(--text-muted)">وقت العودة المتوقع: ${escapeHtml(loc.returnTime || 'غير محدد')}</p>
+        ${loc.note ? `<p style="font-size:13px;color:var(--warning);margin-top:6px">ملاحظة: ${escapeHtml(loc.note)}</p>` : ''}
+      `;
+    });
+
+    db.collection('notifications').onSnapshot(snap => {
+      allNotifications = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sortByCreatedDesc).slice(0, 30);
+      renderParentNotifications();
+    });
+
+    function renderParentNotifications() {
+      const el = document.getElementById('parent-notif-list');
+      if (!el || !currentChild) return;
+      const filtered = allNotifications.filter(n =>
+        n.targetType === 'all' ||
+        n.targetType === 'all_parents' ||
+        (n.targetType === 'group' && n.targetId === currentChild.groupId) ||
+        (n.targetType === 'student' && n.targetId === selectedStudentId)
+      );
+      if (filtered.length === 0) { el.innerHTML = '<p style="color:var(--text-muted)">لا توجد إشعارات</p>'; return; }
+      el.innerHTML = filtered.map(n => `<div class="card" style="margin-bottom:8px"><h4 style="font-size:14px;font-weight:700">${escapeHtml(n.title || 'إشعار')}</h4><p style="font-size:13px;margin-top:4px">${escapeHtml(n.message || n.content || '')}</p></div>`).join('');
+    }
+
+    function updateContactHint() {
+      const type = document.getElementById('parent-msg-target').value;
+      const hint = document.getElementById('contact-hint');
+      if (type === 'supervisor') {
+        hint.textContent = currentChild && currentChild.supervisorId ? `سيتم إرسال الرسالة إلى مشرف الابن الحالي: ${currentSupervisorName}` : 'لا يوجد مشرف مرتبط بالابن الحالي حتى الآن.';
+      } else {
+        hint.textContent = 'سيتم إرسال الرسالة للإدارة العامة.';
+      }
+    }
+
+    async function sendParentMessage() {
+      const content = document.getElementById('parent-msg').value.trim();
+      if (!content) return showToast('اكتب الرسالة أولاً', 'error');
+      if (!currentChild || !selectedStudentId) return showToast('اختر الابن أولاً', 'error');
+
+      const target = document.getElementById('parent-msg-target').value;
+      const toRole = target === 'supervisor' ? 'supervisor' : 'admin';
+      const toId = toRole === 'supervisor' ? (currentChild.supervisorId || '') : '';
+      if (toRole === 'supervisor' && !toId) return showToast('لا يوجد مشرف مرتبط بهذا الابن', 'error');
+
+      const threadId = makeParentThreadId(parentSession.phone, selectedStudentId, toRole, toId);
+      await db.collection('messages').add({
+        from: parentSession.parentName || 'ولي الأمر',
+        fromName: parentSession.parentName || 'ولي الأمر',
+        fromRole: 'parent',
+        parentPhone: parentSession.phone,
+        studentId: selectedStudentId,
+        studentName: currentChild.name || '',
+        groupId: currentChild.groupId || '',
+        supervisorId: currentChild.supervisorId || '',
+        toRole,
+        toId,
+        to: toRole === 'admin' ? 'الإدارة' : currentSupervisorName,
+        content,
+        replyToMessageId: null,
+        threadId,
+        read: false,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast('تم إرسال الرسالة');
+      document.getElementById('parent-msg').value = '';
+    }
+
+    function renderParentMessages(messages) {
+      const el = document.getElementById('parent-messages-list');
+      if (!el) return;
+      const phone = normalizePhone(parentSession.phone || '');
+      const docs = messages
+        .filter(m => normalizePhone(m.parentPhone || phone) === phone)
+        .sort(sortByCreatedDesc);
+      if (docs.length === 0) { el.innerHTML = '<p style="color:var(--text-muted)">لا توجد رسائل لهذا الابن بعد</p>'; return; }
+      el.innerHTML = docs.map(m => {
+        const label = m.fromRole === 'parent' ? 'ولي الأمر' : m.fromRole === 'admin' ? 'الإدارة' : 'المشرف';
+        return `<div class="card thread-card" style="margin-bottom:8px">
+          <p style="font-weight:800;font-size:13px">من: ${label}</p>
+          <p style="margin-top:4px">${escapeHtml(m.content || '')}</p>
+          <p style="font-size:12px;color:var(--text-muted);margin-top:6px">${escapeHtml(formatDateTimeArabic(m.createdAt))}</p>
+        </div>`;
+      }).join('');
+    }
+
+    renderChildSelector();
+    bindSelectedChild();
+    updateContactHint();
+  </script>
+</body>
+</html>

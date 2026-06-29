@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — لوحة التحكم</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link active">📊 لوحة التحكم</a>
+      <a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a>
+      <a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a>
+      <a href="groups.html" class="sidebar-link">👥 المجموعات</a>
+      <a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a>
+      <a href="location.html" class="sidebar-link">📍 الموقع</a>
+      <a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a>
+      <a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a>
+      <a href="points.html" class="sidebar-link">⭐ النقاط</a>
+      <a href="tasks.html" class="sidebar-link">📋 المهام</a>
+      <a href="notifications.html" class="sidebar-link">📢 الإشعارات</a>
+      <a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a>
+      <a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a>
+      <a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a>
+      <a href="invoices.html" class="sidebar-link">🧾 الفواتير</a>
+      <a href="budget.html" class="sidebar-link">💰 الميزانية</a>
+      <a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0">
+      <a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>📊 لوحة التحكم</h1>
+        <span id="trip-name" style="color:var(--text-muted);font-weight:600"></span>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="stat-icon">👨‍🎓</div><div class="stat-number" id="stat-students">0</div><div class="stat-label">الطلاب</div></div>
+        <div class="stat-card"><div class="stat-icon">👨‍💼</div><div class="stat-number" id="stat-supervisors">0</div><div class="stat-label">المشرفون</div></div>
+        <div class="stat-card accent"><div class="stat-icon">📸</div><div class="stat-number" id="stat-media">0</div><div class="stat-label">المشاركات</div></div>
+        <div class="stat-card"><div class="stat-icon">✅</div><div class="stat-number" id="stat-tasks">0</div><div class="stat-label">المهام المنجزة</div></div>
+      </div>
+
+      <!-- Budget Status -->
+      <div class="card" id="budget-card" style="margin-bottom:24px;display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+          <h3 style="font-size:16px;font-weight:700">💰 حالة الميزانية</h3>
+          <span id="budget-status-badge" class="badge-status badge-approved">جيدة</span>
+        </div>
+        <div style="display:flex;gap:24px;margin-bottom:12px;flex-wrap:wrap">
+          <div><span style="color:var(--text-muted);font-size:13px">المتبقي</span><div style="font-size:20px;font-weight:800" id="budget-remaining">0</div></div>
+          <div><span style="color:var(--text-muted);font-size:13px">المصروف</span><div style="font-size:20px;font-weight:800" id="budget-spent">0</div></div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="budget-progress" style="width:0%"></div></div>
+      </div>
+
+      <!-- Current Activity -->
+      <div class="section">
+        <h2 class="section-title">🎯 النشاط الجاري الآن</h2>
+        <div class="card" id="current-activity">
+          <div class="empty-state" style="padding:20px"><p>لا يوجد نشاط جارٍ حالياً</p></div>
+        </div>
+      </div>
+
+      <!-- Groups Ranking + Top Students -->
+      <div class="grid-2">
+        <div class="section">
+          <h2 class="section-title">🏆 ترتيب المجموعات</h2>
+          <div class="card" id="groups-ranking">
+            <div class="skeleton-card"><div class="skeleton-line w-60"></div><div class="skeleton-line w-40"></div></div>
+          </div>
+        </div>
+        <div class="section">
+          <h2 class="section-title">⭐ أفضل 3 طلاب</h2>
+          <div class="card" id="top-students">
+            <div class="skeleton-card"><div class="skeleton-line w-60"></div><div class="skeleton-line w-40"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Timeline -->
+      <div class="section">
+        <h2 class="section-title">🕐 آخر الأحداث</h2>
+        <div class="card" id="recent-timeline">
+          <div class="skeleton-card"><div class="skeleton-line w-80"></div><div class="skeleton-line w-60"></div></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    // Load trip name
+    db.collection('settings').doc('main').onSnapshot(doc => {
+      if (doc.exists) document.getElementById('trip-name').textContent = doc.data().tripName || '';
+    });
+
+    // Stats
+    db.collection('students').onSnapshot(snap => {
+      document.getElementById('stat-students').textContent = snap.size;
+    });
+    db.collection('supervisors').onSnapshot(snap => {
+      document.getElementById('stat-supervisors').textContent = snap.size;
+    });
+    db.collection('media').where('status', '==', 'approved').onSnapshot(snap => {
+      document.getElementById('stat-media').textContent = snap.size;
+    });
+    db.collection('tasks').where('status', '==', 'approved').onSnapshot(snap => {
+      document.getElementById('stat-tasks').textContent = snap.size;
+    });
+
+    // Budget
+    db.collection('budget').doc('main').onSnapshot(doc => {
+      if (doc.exists) {
+        const d = doc.data();
+        const card = document.getElementById('budget-card');
+        card.style.display = 'block';
+        document.getElementById('budget-remaining').textContent = (d.remainingAmount || 0).toLocaleString() + ' ريال';
+        document.getElementById('budget-spent').textContent = (d.spentAmount || 0).toLocaleString() + ' ريال';
+        const pct = d.totalBudget ? Math.round((d.spentAmount / d.totalBudget) * 100) : 0;
+        const prog = document.getElementById('budget-progress');
+        prog.style.width = pct + '%';
+        prog.className = 'progress-fill' + (pct >= 95 ? ' danger' : pct >= 80 ? ' warning' : '');
+        const badge = document.getElementById('budget-status-badge');
+        if (d.status === 'locked') { badge.textContent = '🔒 مقفلة'; badge.className = 'badge-status badge-rejected'; }
+        else if (d.status === 'warning') { badge.textContent = '⚠️ تحذير'; badge.className = 'badge-status badge-pending'; }
+        else { badge.textContent = '✅ جيدة'; badge.className = 'badge-status badge-approved'; }
+      }
+    });
+
+    // Current activity
+    db.collection('schedule').where('status', '==', 'ongoing').onSnapshot(snap => {
+      const el = document.getElementById('current-activity');
+      if (snap.empty) {
+        el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-muted)">لا يوجد نشاط جارٍ حالياً</div>';
+      } else {
+        const a = snap.docs[0].data();
+        el.innerHTML = `<div style="padding:8px"><h3 style="font-size:18px;color:var(--primary);margin-bottom:8px">🎯 ${a.activity}</h3><p style="color:var(--text-muted)">📍 ${a.location || ''} | ⏰ ${a.timeStart || ''} - ${a.timeEnd || ''}</p></div>`;
+      }
+    });
+
+    // Groups ranking
+    db.collection('groups').orderBy('points', 'desc').onSnapshot(snap => {
+      const el = document.getElementById('groups-ranking');
+      if (snap.empty) { el.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px">لا توجد مجموعات</p>'; return; }
+      let html = '<table><thead><tr><th>#</th><th>المجموعة</th><th>النقاط</th></tr></thead><tbody>';
+      snap.docs.forEach((doc, i) => {
+        const d = doc.data();
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i+1);
+        html += `<tr><td>${medal}</td><td>${d.name}</td><td style="font-weight:700">${d.points || 0}</td></tr>`;
+      });
+      html += '</tbody></table>';
+      el.innerHTML = html;
+    });
+
+    // Top students
+    db.collection('students').orderBy('points', 'desc').limit(3).onSnapshot(snap => {
+      const el = document.getElementById('top-students');
+      if (snap.empty) { el.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px">لا يوجد طلاب</p>'; return; }
+      let html = '';
+      snap.docs.forEach((doc, i) => {
+        const d = doc.data();
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉';
+        html += `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;${i < 2 ? 'border-bottom:1px solid var(--border)' : ''}"><span style="font-size:24px">${medal}</span><div><div style="font-weight:700">${d.name}</div><div style="font-size:13px;color:var(--text-muted)">${d.points || 0} نقطة</div></div></div>`;
+      });
+      el.innerHTML = html;
+    });
+
+    // Recent timeline
+    db.collection('timeline').orderBy('createdAt', 'desc').limit(5).onSnapshot(snap => {
+      const el = document.getElementById('recent-timeline');
+      if (snap.empty) { el.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px">لا توجد أحداث بعد</p>'; return; }
+      let html = '<div class="timeline">';
+      snap.docs.forEach(doc => {
+        const d = doc.data();
+        const icons = { info: '📋', media: '📸', points: '⭐', task: '✅', schedule: '📅' };
+        html += `<div class="timeline-item"><div class="timeline-time">${d.time || ''}</div><div class="timeline-text">${icons[d.type] || '📋'} ${d.text}</div></div>`;
+      });
+      html += '</div>';
+      el.innerHTML = html;
+    });
+  </script>
+</body>
+</html>

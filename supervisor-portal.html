@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — بوابة المشرف</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="portal-layout">
+    <header class="portal-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <img src="assets/logo.png" alt="شعار الجمعية" class="portal-logo">
+        <div><h2 style="font-size:16px;font-weight:700">بوابة المشرف</h2><p style="font-size:12px;color:rgba(255,255,255,.82)" id="sup-name-header">مرحباً</p></div>
+      </div>
+      <button class="btn btn-sm btn-secondary" onclick="sessionStorage.clear();location.href='index.html'">خروج</button>
+    </header>
+
+    <main class="portal-content">
+      <div class="tabs" style="margin-bottom:20px">
+        <button class="tab active" onclick="showPortalTab('my-students', event)">طلابي</button>
+        <button class="tab" onclick="showPortalTab('add-points', event)">إضافة نقاط</button>
+        <button class="tab" onclick="showPortalTab('upload-media', event)">رفع إعلام</button>
+        <button class="tab" onclick="showPortalTab('group-messages', event)">رسائل المجموعة</button>
+        <button class="tab" onclick="showPortalTab('create-task', event)">إنشاء مهمة</button>
+        <button class="tab" onclick="showPortalTab('my-tasks', event)">المهام</button>
+        <button class="tab" onclick="showPortalTab('parent-messages', event)">رسائل أولياء الأمور</button>
+        <button class="tab" onclick="showPortalTab('messages', event)">رسائل الإدارة</button>
+        <button class="tab" onclick="showPortalTab('submit-invoice', event)">تقديم فاتورة</button>
+      </div>
+
+      <div id="my-students" class="portal-section">
+        <h3 style="font-weight:700;margin-bottom:16px">👨‍🎓 طلابي</h3>
+        <div id="my-students-list"></div>
+      </div>
+
+      <div id="add-points" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">⭐ إضافة نقاط</h3>
+        <div class="card" style="max-width:500px">
+          <div class="form-group"><label>الطالب</label><select id="sup-point-student" class="form-control"></select></div>
+          <div class="form-group"><label>النقاط</label><input type="number" id="sup-point-amount" class="form-control" min="1" value="5"></div>
+          <div class="form-group"><label>السبب</label><input type="text" id="sup-point-reason" class="form-control" required></div>
+          <button class="btn btn-primary" onclick="supAddPoints()">إضافة</button>
+        </div>
+      </div>
+
+      <div id="upload-media" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">📸 رفع مشاركة إعلامية</h3>
+        <div class="card" style="max-width:500px">
+          <div class="form-group"><label>الطالب</label><select id="sup-media-student" class="form-control"></select></div>
+          <div class="form-group"><label>النوع</label><select id="sup-media-type" class="form-control"><option value="image">صورة</option><option value="video">فيديو</option></select></div>
+          <div class="form-group"><label>الملف</label><input type="file" id="sup-media-file" class="form-control" accept="image/*,video/*"></div>
+          <div class="form-group"><label>وصف</label><input type="text" id="sup-media-desc" class="form-control"></div>
+          <button class="btn btn-primary" id="sup-upload-btn" onclick="supUploadMedia()">رفع المشاركة</button>
+        </div>
+      </div>
+
+      <div id="group-messages" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">💬 رسائل المجموعة</h3>
+        <div class="card" style="max-width:640px">
+          <div class="form-group"><label>نوع الإرسال</label><select id="sup-group-msg-type" class="form-control" onchange="updateSupervisorTargetSelects()"><option value="group">لكل طلاب مجموعة من مجموعاتي</option><option value="student">لطالب محدد من طلابي</option></select></div>
+          <div class="form-group"><label>الهدف</label><select id="sup-group-msg-target" class="form-control"></select></div>
+          <div class="form-group"><label>نص الرسالة</label><textarea id="sup-group-msg-content" class="form-control" rows="3" placeholder="اكتب رسالة واضحة ومختصرة..."></textarea></div>
+          <button class="btn btn-primary" onclick="sendSupervisorGroupMessage()">إرسال الرسالة</button>
+        </div>
+      </div>
+
+      <div id="create-task" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">📋 إنشاء مهمة</h3>
+        <div class="card" style="max-width:680px">
+          <div class="form-group"><label>عنوان المهمة</label><input type="text" id="sup-task-title" class="form-control"></div>
+          <div class="form-group"><label>وصف المهمة</label><textarea id="sup-task-desc" class="form-control" rows="3"></textarea></div>
+          <div class="grid-2">
+            <div class="form-group"><label>نوع الهدف</label><select id="sup-task-type" class="form-control" onchange="updateSupervisorTargetSelects()"><option value="group">مجموعة</option><option value="student">طالب</option></select></div>
+            <div class="form-group"><label>الهدف</label><select id="sup-task-target" class="form-control"></select></div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group"><label>النقاط إن وجدت</label><input type="number" id="sup-task-points" class="form-control" min="0" value="5"></div>
+            <div class="form-group"><label>موعد نهائي اختياري</label><input type="datetime-local" id="sup-task-deadline" class="form-control"></div>
+          </div>
+          <button class="btn btn-primary" onclick="createSupervisorTask()">إنشاء المهمة</button>
+        </div>
+      </div>
+
+      <div id="my-tasks" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">📋 مهام مجموعتي وطلابي</h3>
+        <div id="sup-tasks-list"></div>
+      </div>
+
+      <div id="parent-messages" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">👨‍👩‍👦 رسائل أولياء الأمور</h3>
+        <div id="parent-messages-list"></div>
+      </div>
+
+      <div id="messages" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">💬 رسائل الإدارة</h3>
+        <div class="card" style="max-width:500px;margin-bottom:16px">
+          <div class="form-group"><label>رسالة للإدارة</label><textarea id="sup-msg-text" class="form-control" placeholder="اكتب رسالتك..."></textarea></div>
+          <button class="btn btn-primary" onclick="sendSupMessage()">إرسال</button>
+        </div>
+        <div id="sup-messages-list"></div>
+      </div>
+
+      <div id="submit-invoice" class="portal-section" style="display:none">
+        <h3 style="font-weight:700;margin-bottom:16px">🧾 تقديم فاتورة</h3>
+        <div class="card" style="max-width:500px">
+          <div class="form-group"><label>العنوان</label><input type="text" id="inv-title" class="form-control" required></div>
+          <div class="form-group"><label>الجهة / المحل</label><input type="text" id="inv-vendor" class="form-control"></div>
+          <div class="form-group"><label>المبلغ (ريال)</label><input type="number" id="inv-amount" class="form-control" min="1" required></div>
+          <div class="form-group"><label>الفئة</label><select id="inv-category" class="form-control"><option value="🍽️ مأكولات ومشروبات">🍽️ مأكولات ومشروبات</option><option value="🚌 نقل وتنقلات">🚌 نقل وتنقلات</option><option value="🛍️ مستلزمات الرحلة">🛍️ مستلزمات الرحلة</option><option value="🎨 أدوات أنشطة">🎨 أدوات أنشطة</option><option value="🏥 صحة وطوارئ">🏥 صحة وطوارئ</option><option value="📦 مشتريات متنوعة">📦 مشتريات متنوعة</option></select></div>
+          <div class="form-group"><label>صورة الإيصال</label><input type="file" id="inv-receipt" class="form-control" accept="image/*"></div>
+          <div class="form-group"><label>ملاحظات</label><textarea id="inv-notes" class="form-control"></textarea></div>
+          <button class="btn btn-primary" onclick="submitInvoice()">تقديم</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    const supSession = JSON.parse(sessionStorage.getItem('supSession') || 'null');
+    if (!supSession) window.location.href = 'index.html';
+    const supId = supSession ? supSession.id : '';
+    const supName = supSession ? supSession.name : '';
+    let myStudents = [];
+    let myGroupIds = [];
+    let allGroups = [];
+    let scopedTasks = [];
+    let supervisorMessages = [];
+
+    document.getElementById('sup-name-header').textContent = 'مرحباً ' + supName;
+
+    function showPortalTab(id, ev) {
+      document.querySelectorAll('.portal-section').forEach(s => s.style.display = 'none');
+      document.getElementById(id).style.display = 'block';
+      document.querySelectorAll('main > .tabs .tab').forEach(t => t.classList.remove('active'));
+      if (ev && ev.target) ev.target.classList.add('active');
+    }
+
+    function isMyStudent(studentId) { return myStudents.some(s => s.id === studentId); }
+    function isMyGroup(groupId) { return !!groupId && myGroupIds.includes(groupId); }
+    function getStudent(studentId) { return myStudents.find(s => s.id === studentId); }
+    function getGroupName(groupId) { return (allGroups.find(g => g.id === groupId) || {}).name || groupId || '-'; }
+
+    db.collection('groups').onSnapshot(snap => {
+      allGroups = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      updateSupervisorTargetSelects();
+      renderSupervisorTasks();
+    });
+
+    db.collection('students').where('supervisorId', '==', supId).onSnapshot(snap => {
+      myStudents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      myGroupIds = [...new Set(myStudents.map(s => s.groupId).filter(Boolean))];
+      if (supSession.groupId && !myGroupIds.includes(supSession.groupId)) myGroupIds.push(supSession.groupId);
+      document.getElementById('my-students-list').innerHTML = myStudents.length === 0 ? '<p style="color:var(--text-muted)">لا يوجد طلاب مسجلون لك</p>' :
+        myStudents.map(s => `<div class="card" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center"><div><span style="font-weight:600">${escapeHtml(s.name || '')}</span><span style="margin-right:8px;font-size:12px;color:var(--text-muted)">${escapeHtml(s.code || '')}</span><p style="font-size:12px;color:var(--text-muted)">المجموعة: ${escapeHtml(getGroupName(s.groupId))}</p></div><span style="font-weight:700;color:var(--primary)">${s.points || 0} نقطة</span></div></div>`).join('');
+      updateSupervisorTargetSelects();
+      renderSupervisorTasks();
+      renderParentInbox();
+    });
+
+    function updateSupervisorTargetSelects() {
+      const studentOpts = myStudents.map(s => `<option value="${s.id}" data-name="${escapeHtml(s.name || '')}" data-group="${escapeHtml(s.groupId || '')}">${escapeHtml(s.name || '')}</option>`).join('');
+      const groupOpts = myGroupIds.map(id => `<option value="${id}">${escapeHtml(getGroupName(id))}</option>`).join('');
+
+      ['sup-point-student','sup-media-student'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.innerHTML = '<option value="">اختر</option>' + studentOpts;
+      });
+
+      const msgType = document.getElementById('sup-group-msg-type') ? document.getElementById('sup-group-msg-type').value : 'group';
+      const msgTarget = document.getElementById('sup-group-msg-target');
+      if (msgTarget) msgTarget.innerHTML = msgType === 'student' ? '<option value="">اختر الطالب</option>' + studentOpts : '<option value="">اختر المجموعة</option>' + groupOpts;
+
+      const taskType = document.getElementById('sup-task-type') ? document.getElementById('sup-task-type').value : 'group';
+      const taskTarget = document.getElementById('sup-task-target');
+      if (taskTarget) taskTarget.innerHTML = taskType === 'student' ? '<option value="">اختر الطالب</option>' + studentOpts : '<option value="">اختر المجموعة</option>' + groupOpts;
+    }
+
+    async function supAddPoints() {
+      const studentId = document.getElementById('sup-point-student').value;
+      const amount = parseInt(document.getElementById('sup-point-amount').value || '0', 10);
+      const reason = document.getElementById('sup-point-reason').value.trim();
+      if (!studentId || !amount || !reason) return showToast('أكمل جميع الحقول', 'error');
+      if (!isMyStudent(studentId)) return showToast('لا يمكنك منح نقاط لطالب ليس ضمن طلابك', 'error');
+      const student = getStudent(studentId);
+      await db.collection('students').doc(studentId).update({ points: firebase.firestore.FieldValue.increment(amount) });
+      if (student.groupId) await db.collection('groups').doc(student.groupId).update({ points: firebase.firestore.FieldValue.increment(amount) }).catch(() => {});
+      await db.collection('points').add({ studentId, studentName: student.name || '', groupId: student.groupId || '', amount, reason, addedBy: supName, addedByRole: 'supervisor', createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      await addTimelineEvent(`+${amount} نقاط للطالب ${student.name || ''} (بواسطة ${supName})`, 'points');
+      showToast('تمت إضافة النقاط');
+      document.getElementById('sup-point-reason').value = '';
+    }
+
+    async function supUploadMedia() {
+      const studentId = document.getElementById('sup-media-student').value;
+      const file = document.getElementById('sup-media-file').files[0];
+      if (!studentId || !file) return showToast('اختر الطالب والملف', 'error');
+      if (!isMyStudent(studentId)) return showToast('لا يمكنك رفع إعلام لطالب ليس ضمن طلابك', 'error');
+      const student = getStudent(studentId);
+      const type = document.getElementById('sup-media-type').value;
+      const description = document.getElementById('sup-media-desc').value.trim();
+      const dateKey = getTodayKey();
+      const timeText = formatTimeArabic(new Date());
+      document.getElementById('sup-upload-btn').disabled = true;
+      try {
+        const uploaded = await uploadFileToDrive(file, { studentId, studentName: student.name, groupId: student.groupId || '', supervisorId: supId, type, description, dateKey, timeText });
+        await db.collection('media').add({
+          studentId, studentName: student.name || '', groupId: student.groupId || '', supervisorId: supId || '', supervisorName: supName || '',
+          type, description, url: uploaded.url, previewUrl: uploaded.previewUrl || uploaded.url, fileId: uploaded.fileId || '',
+          status: 'pending', source: 'supervisor', dateKey, timeText,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        showToast('تم الرفع — بانتظار اعتماد الإدارة');
+        document.getElementById('sup-media-file').value = '';
+        document.getElementById('sup-media-desc').value = '';
+      } catch(e) {
+        showToast('خطأ: ' + e.message, 'error');
+      }
+      document.getElementById('sup-upload-btn').disabled = false;
+    }
+
+    async function sendSupervisorGroupMessage() {
+      const targetType = document.getElementById('sup-group-msg-type').value;
+      const targetId = document.getElementById('sup-group-msg-target').value;
+      const content = document.getElementById('sup-group-msg-content').value.trim();
+      if (!targetId || !content) return showToast('اختر الهدف واكتب الرسالة', 'error');
+      let groupId = targetId;
+      if (targetType === 'student') {
+        const student = getStudent(targetId);
+        if (!student) return showToast('لا يمكنك إرسال رسالة لطالب ليس ضمن طلابك', 'error');
+        groupId = student.groupId || '';
+      } else if (!isMyGroup(targetId)) {
+        return showToast('لا يمكنك إرسال رسالة لمجموعة ليست ضمن طلابك', 'error');
+      }
+      await db.collection('messages').add({
+        fromRole: 'supervisor', fromId: supId, fromName: supName, from: supName,
+        toRole: 'student', targetType, targetId, groupId,
+        content, read: false, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      document.getElementById('sup-group-msg-content').value = '';
+      showToast('تم إرسال الرسالة للطلاب');
+    }
+
+    async function createSupervisorTask() {
+      const title = document.getElementById('sup-task-title').value.trim();
+      const description = document.getElementById('sup-task-desc').value.trim();
+      const targetType = document.getElementById('sup-task-type').value;
+      const targetId = document.getElementById('sup-task-target').value;
+      const points = parseInt(document.getElementById('sup-task-points').value || '0', 10);
+      const deadline = document.getElementById('sup-task-deadline').value;
+      if (!title || !targetId) return showToast('أدخل عنوان المهمة والهدف', 'error');
+      let groupId = targetId;
+      if (targetType === 'student') {
+        const student = getStudent(targetId);
+        if (!student) return showToast('لا يمكنك إنشاء مهمة لطالب ليس ضمن طلابك', 'error');
+        groupId = student.groupId || '';
+      } else if (!isMyGroup(targetId)) {
+        return showToast('لا يمكنك إنشاء مهمة لمجموعة ليست ضمن طلابك', 'error');
+      }
+      await db.collection('tasks').add({
+        title, description, targetType, targetId, groupId,
+        supervisorId: supId, createdByRole: 'supervisor', createdById: supId, createdByName: supName,
+        points, deadline, status: 'new', createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      ['sup-task-title','sup-task-desc','sup-task-deadline'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('sup-task-points').value = 5;
+      showToast('تم إنشاء المهمة');
+    }
+
+    db.collection('tasks').onSnapshot(snap => {
+      scopedTasks = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(t =>
+        t.supervisorId === supId ||
+        isMyGroup(t.groupId) ||
+        (t.targetType === 'group' && isMyGroup(t.targetId)) ||
+        (t.targetType === 'student' && isMyStudent(t.targetId))
+      ).sort(sortByCreatedDesc);
+      renderSupervisorTasks();
+    });
+
+    function renderSupervisorTasks() {
+      const list = document.getElementById('sup-tasks-list');
+      if (!list) return;
+      if (scopedTasks.length === 0) { list.innerHTML = '<p style="color:var(--text-muted)">لا توجد مهام</p>'; return; }
+      list.innerHTML = scopedTasks.map(t => {
+        const badge = t.status === 'approved' ? '✅ معتمدة' : t.status === 'done' ? '⏳ بانتظار اعتماد' : t.status === 'in_progress' ? '🔄 قيد التنفيذ' : '🆕 جديدة';
+        const targetName = t.targetType === 'student' ? ((getStudent(t.targetId) || {}).name || t.targetId) : getGroupName(t.targetId || t.groupId);
+        const source = t.createdByRole === 'supervisor' ? 'أنشأتها أنت' : 'من الإدارة';
+        return `<div class="card" style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div><span style="font-weight:800">${escapeHtml(t.title || '')}</span><p style="font-size:12px;color:var(--text-muted)">${escapeHtml(t.description || '')}</p><div class="meta-line"><span>🎯 ${t.targetType === 'student' ? 'طالب' : 'مجموعة'}: ${escapeHtml(targetName)}</span><span>⭐ ${t.points || 0}</span><span>${source}</span></div></div><span class="badge-status badge-pending">${badge}</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">
+            ${t.status === 'new' ? `<button class="btn btn-sm btn-primary" onclick="startTask('${t.id}')">بدء</button>` : ''}
+            ${t.status === 'in_progress' ? `<button class="btn btn-sm btn-success" onclick="markTaskDone('${t.id}')">تم</button>` : ''}
+          </div></div>`;
+      }).join('');
+    }
+
+    function canTouchTask(id) { return scopedTasks.some(t => t.id === id); }
+    async function startTask(id) { if (!canTouchTask(id)) return showToast('هذه المهمة ليست ضمن نطاقك', 'error'); await db.collection('tasks').doc(id).update({ status: 'in_progress' }); showToast('تم بدء المهمة'); }
+    async function markTaskDone(id) { if (!canTouchTask(id)) return showToast('هذه المهمة ليست ضمن نطاقك', 'error'); await db.collection('tasks').doc(id).update({ status: 'done' }); showToast('تم — بانتظار اعتماد الإدارة'); }
+
+    async function sendSupMessage() {
+      const content = document.getElementById('sup-msg-text').value.trim();
+      if (!content) return;
+      await db.collection('messages').add({ from: supName, fromName: supName, fromRole: 'supervisor', fromId: supId, toRole: 'admin', content, read: false, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+      showToast('تم إرسال الرسالة');
+      document.getElementById('sup-msg-text').value = '';
+    }
+
+    db.collection('messages').where('toRole', '==', 'supervisor').onSnapshot(snap => {
+      supervisorMessages = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.toId === supId || m.supervisorId === supId || (m.fromRole === 'admin' && !m.toId));
+      renderAdminInbox();
+      renderParentInbox();
+    });
+
+    function renderAdminInbox() {
+      const list = document.getElementById('sup-messages-list');
+      const docs = supervisorMessages.filter(m => m.fromRole === 'admin').sort(sortByCreatedDesc);
+      list.innerHTML = docs.map(m => `<div class="card" style="margin-bottom:8px"><p style="font-weight:600;font-size:13px">من: الإدارة</p><p style="margin-top:4px">${escapeHtml(m.content || '')}</p></div>`).join('') || '<p style="color:var(--text-muted)">لا توجد رسائل</p>';
+    }
+
+    function renderParentInbox() {
+      const list = document.getElementById('parent-messages-list');
+      if (!list) return;
+      const docs = supervisorMessages.filter(m => m.fromRole === 'parent' && (m.toId === supId || m.supervisorId === supId)).sort(sortByCreatedDesc);
+      if (docs.length === 0) { list.innerHTML = '<p style="color:var(--text-muted)">لا توجد رسائل من أولياء الأمور</p>'; return; }
+      list.innerHTML = docs.map(m => `<div class="card thread-card" style="margin-bottom:12px">
+        <p style="font-weight:800;font-size:14px">${escapeHtml(m.fromName || m.from || 'ولي الأمر')} — الطالب: ${escapeHtml(m.studentName || '')}</p>
+        <p style="font-size:13px;color:var(--text-muted)">المجموعة: ${escapeHtml(getGroupName(m.groupId))} | ${escapeHtml(formatDateTimeArabic(m.createdAt))}</p>
+        <p style="margin-top:8px">${escapeHtml(m.content || '')}</p>
+        <div style="margin-top:12px"><textarea class="form-control" id="reply-${m.id}" rows="2" placeholder="اكتب الرد..."></textarea><button class="btn btn-sm btn-primary" style="margin-top:8px" onclick="replyToParent('${m.id}')">رد</button></div>
+      </div>`).join('');
+    }
+
+    async function replyToParent(messageId) {
+      const original = supervisorMessages.find(m => m.id === messageId);
+      const replyEl = document.getElementById('reply-' + messageId);
+      const content = replyEl ? replyEl.value.trim() : '';
+      if (!original || !content) return showToast('اكتب الرد أولاً', 'error');
+      await db.collection('messages').add({
+        from: supName, fromName: supName, fromRole: 'supervisor', fromId: supId,
+        toRole: 'parent', to: original.fromName || original.from || 'ولي الأمر',
+        parentPhone: original.parentPhone || '', studentId: original.studentId || '', studentName: original.studentName || '',
+        groupId: original.groupId || '', supervisorId: supId, content,
+        replyToMessageId: messageId, threadId: original.threadId || makeParentThreadId(original.parentPhone, original.studentId, 'supervisor', supId),
+        read: false, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      replyEl.value = '';
+      await db.collection('messages').doc(messageId).update({ read: true }).catch(() => {});
+      showToast('تم إرسال الرد لولي الأمر');
+    }
+
+    async function submitInvoice() {
+      const data = {
+        title: document.getElementById('inv-title').value.trim(),
+        vendor: document.getElementById('inv-vendor').value.trim(),
+        amount: parseInt(document.getElementById('inv-amount').value || '0', 10),
+        category: document.getElementById('inv-category').value,
+        notes: document.getElementById('inv-notes').value.trim(),
+        submittedBy: supName, submittedById: supId, status: 'pending',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      if (!data.title || !data.amount) return showToast('أكمل الحقول المطلوبة', 'error');
+      await db.collection('invoices').add(data);
+      showToast('تم تقديم الفاتورة — بانتظار اعتماد الإدارة');
+      document.getElementById('inv-title').value = '';
+      document.getElementById('inv-vendor').value = '';
+      document.getElementById('inv-amount').value = '';
+      document.getElementById('inv-notes').value = '';
+    }
+  </script>
+</body>
+</html>

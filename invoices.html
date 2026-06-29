@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — الفواتير</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a><a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a><a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a><a href="groups.html" class="sidebar-link">👥 المجموعات</a><a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a><a href="location.html" class="sidebar-link">📍 الموقع</a><a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a><a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a><a href="points.html" class="sidebar-link">⭐ النقاط</a><a href="tasks.html" class="sidebar-link">📋 المهام</a><a href="notifications.html" class="sidebar-link">📢 الإشعارات</a><a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a><a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a><a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a><a href="invoices.html" class="sidebar-link active">🧾 الفواتير</a><a href="budget.html" class="sidebar-link">💰 الميزانية</a><a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0"><a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header"><h1>🧾 إدارة الفواتير</h1></div>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-number" id="total-approved-amount">0</div><div class="stat-label">إجمالي المعتمد (ريال)</div></div>
+        <div class="stat-card"><div class="stat-icon">📄</div><div class="stat-number" id="total-invoices">0</div><div class="stat-label">إجمالي الفواتير</div></div>
+        <div class="stat-card accent"><div class="stat-icon">🟡</div><div class="stat-number" id="pending-invoices">0</div><div class="stat-label">معلقة</div></div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters">
+        <select id="filter-status" class="filter-select" onchange="filterInvoices()"><option value="">كل الحالات</option><option value="pending">معلقة</option><option value="approved">معتمدة</option><option value="rejected">مرفوضة</option></select>
+        <select id="filter-category" class="filter-select" onchange="filterInvoices()"><option value="">كل الفئات</option><option value="🍽️ مأكولات ومشروبات">🍽️ مأكولات</option><option value="🚌 نقل وتنقلات">🚌 نقل</option><option value="🛍️ مستلزمات الرحلة">🛍️ مستلزمات</option><option value="🎨 أدوات أنشطة">🎨 أنشطة</option><option value="🏥 صحة وطوارئ">🏥 صحة</option><option value="📦 مشتريات متنوعة">📦 متنوعة</option></select>
+      </div>
+
+      <!-- Invoice List -->
+      <div id="invoices-list"></div>
+    </main>
+  </div>
+
+  <!-- Review Modal -->
+  <div class="modal-overlay" id="review-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>مراجعة الفاتورة</h3><button class="modal-close" onclick="document.getElementById('review-modal').classList.remove('active')">&times;</button></div>
+      <div id="review-details"></div>
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn btn-success" style="flex:1" onclick="approveInvoice()">✅ اعتماد</button>
+        <button class="btn btn-danger" style="flex:1" onclick="showRejectForm()">❌ رفض</button>
+      </div>
+      <div id="reject-form" style="display:none;margin-top:12px">
+        <textarea id="reject-reason" class="form-control" placeholder="سبب الرفض (إجباري)"></textarea>
+        <button class="btn btn-danger" style="width:100%;margin-top:8px" onclick="rejectInvoice()">تأكيد الرفض</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    let allInvoices = [], currentReviewId = null;
+
+    db.collection('invoices').orderBy('createdAt', 'desc').onSnapshot(snap => {
+      allInvoices = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      // Stats
+      const approved = allInvoices.filter(i => i.status === 'approved');
+      document.getElementById('total-approved-amount').textContent = approved.reduce((s, i) => s + (i.amount || 0), 0).toLocaleString();
+      document.getElementById('total-invoices').textContent = allInvoices.length;
+      document.getElementById('pending-invoices').textContent = allInvoices.filter(i => i.status === 'pending').length;
+      filterInvoices();
+    });
+
+    function filterInvoices() {
+      const status = document.getElementById('filter-status').value;
+      const category = document.getElementById('filter-category').value;
+      let filtered = allInvoices.filter(i => {
+        if (status && i.status !== status) return false;
+        if (category && i.category !== category) return false;
+        return true;
+      });
+
+      const container = document.getElementById('invoices-list');
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">🧾</div><p>لا توجد فواتير</p></div>';
+        return;
+      }
+      container.innerHTML = filtered.map(inv => {
+        const badge = inv.status === 'approved' ? '<span class="badge-status badge-approved">✅ معتمدة</span>' : inv.status === 'rejected' ? '<span class="badge-status badge-rejected">❌ مرفوضة</span>' : '<span class="badge-status badge-pending">🟡 معلقة</span>';
+        return `<div class="card" style="margin-bottom:12px;cursor:${inv.status === 'pending' ? 'pointer' : 'default'}" onclick="${inv.status === 'pending' ? `openReview('${inv.id}')` : ''}">
+          <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:8px">
+            <div>
+              <h3 style="font-size:15px;font-weight:700">${inv.title}</h3>
+              <p style="font-size:13px;color:var(--text-muted)">${inv.vendor || ''} | ${inv.category || ''}</p>
+              <p style="font-size:13px;color:var(--text-muted)">مقدم من: ${inv.submittedBy || '-'}</p>
+            </div>
+            <div style="text-align:left">
+              <div style="font-size:20px;font-weight:800;color:var(--primary)">${(inv.amount || 0).toLocaleString()} ريال</div>
+              ${badge}
+            </div>
+          </div>
+          ${inv.rejectionReason ? `<p style="font-size:13px;color:var(--danger);margin-top:8px;padding:8px;background:var(--danger-bg);border-radius:8px">سبب الرفض: ${inv.rejectionReason}</p>` : ''}
+          ${inv.receiptUrl ? `<a href="${inv.receiptUrl}" target="_blank" class="btn btn-sm btn-secondary" style="margin-top:8px" onclick="event.stopPropagation()">عرض الإيصال</a>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    function openReview(id) {
+      currentReviewId = id;
+      const inv = allInvoices.find(i => i.id === id);
+      document.getElementById('review-details').innerHTML = `
+        <p><strong>العنوان:</strong> ${inv.title}</p>
+        <p><strong>الجهة:</strong> ${inv.vendor}</p>
+        <p><strong>الفئة:</strong> ${inv.category}</p>
+        <p><strong>المبلغ:</strong> ${inv.amount} ريال</p>
+        <p><strong>الملاحظات:</strong> ${inv.notes || '-'}</p>
+        ${inv.receiptUrl ? `<p><a href="${inv.receiptUrl}" target="_blank">عرض الإيصال</a></p>` : ''}
+      `;
+      document.getElementById('reject-form').style.display = 'none';
+      document.getElementById('review-modal').classList.add('active');
+    }
+
+    async function approveInvoice() {
+      const inv = allInvoices.find(i => i.id === currentReviewId);
+      await db.collection('invoices').doc(currentReviewId).update({
+        status: 'approved', reviewedBy: 'admin', reviewedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      await updateBudgetOnApproval(inv.amount);
+      await addTimelineEvent(`اعتُمدت فاتورة ${inv.amount} ريال — ${inv.title}`, 'info');
+      document.getElementById('review-modal').classList.remove('active');
+      showToast('تم اعتماد الفاتورة');
+    }
+
+    function showRejectForm() { document.getElementById('reject-form').style.display = 'block'; }
+
+    async function rejectInvoice() {
+      const reason = document.getElementById('reject-reason').value.trim();
+      if (!reason) return showToast('اكتب سبب الرفض', 'error');
+      const inv = allInvoices.find(i => i.id === currentReviewId);
+      await db.collection('invoices').doc(currentReviewId).update({
+        status: 'rejected', rejectionReason: reason, reviewedBy: 'admin', reviewedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      await addTimelineEvent(`رُفضت فاتورة — السبب: ${reason}`, 'info');
+      document.getElementById('review-modal').classList.remove('active');
+      showToast('تم رفض الفاتورة');
+    }
+  </script>
+</body>
+</html>

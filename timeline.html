@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — سجل الأحداث</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a><a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a><a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a><a href="groups.html" class="sidebar-link">👥 المجموعات</a><a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a><a href="location.html" class="sidebar-link">📍 الموقع</a><a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a><a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a><a href="points.html" class="sidebar-link">⭐ النقاط</a><a href="tasks.html" class="sidebar-link">📋 المهام</a><a href="notifications.html" class="sidebar-link">📢 الإشعارات</a><a href="timeline.html" class="sidebar-link active">🕐 سجل الأحداث</a><a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a><a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a><a href="invoices.html" class="sidebar-link">🧾 الفواتير</a><a href="budget.html" class="sidebar-link">💰 الميزانية</a><a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0"><a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>🕐 سجل أحداث الرحلة</h1>
+        <button class="btn btn-primary" onclick="openAddEvent()">+ إضافة حدث يدوي</button>
+      </div>
+
+      <div class="card">
+        <div class="timeline" id="timeline-list"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add Event Modal -->
+  <div class="modal-overlay" id="event-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>إضافة حدث يدوي</h3><button class="modal-close" onclick="document.getElementById('event-modal').classList.remove('active')">&times;</button></div>
+      <form onsubmit="addManualEvent(event)">
+        <div class="form-group"><label>نص الحدث</label><input type="text" id="event-text" class="form-control" required placeholder="مثال: انطلقت الحافلة"></div>
+        <div class="form-group"><label>النوع</label><select id="event-type" class="form-control"><option value="info">عام</option><option value="schedule">نشاط</option><option value="media">إعلام</option><option value="points">نقاط</option><option value="task">مهمة</option></select></div>
+        <button type="submit" class="btn btn-primary" style="width:100%">إضافة</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    const icons = { info: '📋', media: '📸', points: '⭐', task: '✅', schedule: '📅' };
+
+    db.collection('timeline').orderBy('createdAt', 'desc').onSnapshot(snap => {
+      const list = document.getElementById('timeline-list');
+      if (snap.empty) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">🕐</div><p>لا توجد أحداث بعد</p></div>'; return; }
+      list.innerHTML = snap.docs.map(doc => {
+        const d = doc.data();
+        return `<div class="timeline-item"><div class="timeline-time">${d.time || ''} ${d.createdAt ? '— ' + d.createdAt.toDate().toLocaleDateString('ar-SA') : ''}</div><div class="timeline-text">${icons[d.type] || '📋'} ${d.text}</div></div>`;
+      }).join('');
+    });
+
+    function openAddEvent() { document.getElementById('event-modal').classList.add('active'); }
+
+    async function addManualEvent(e) {
+      e.preventDefault();
+      const text = document.getElementById('event-text').value.trim();
+      const type = document.getElementById('event-type').value;
+      await addTimelineEvent(text, type);
+      showToast('تم إضافة الحدث');
+      document.getElementById('event-modal').classList.remove('active');
+      document.getElementById('event-text').value = '';
+    }
+  </script>
+</body>
+</html>

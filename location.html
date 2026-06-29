@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — الموقع</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a>
+      <a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a>
+      <a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a>
+      <a href="groups.html" class="sidebar-link">👥 المجموعات</a>
+      <a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a>
+      <a href="location.html" class="sidebar-link active">📍 الموقع</a>
+      <a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a>
+      <a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a>
+      <a href="points.html" class="sidebar-link">⭐ النقاط</a>
+      <a href="tasks.html" class="sidebar-link">📋 المهام</a>
+      <a href="notifications.html" class="sidebar-link">📢 الإشعارات</a>
+      <a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a>
+      <a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a>
+      <a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a>
+      <a href="invoices.html" class="sidebar-link">🧾 الفواتير</a>
+      <a href="budget.html" class="sidebar-link">💰 الميزانية</a>
+      <a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0">
+      <a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header"><h1>📍 موقع الرحلة</h1></div>
+
+      <div class="card" style="max-width:680px">
+        <div class="form-group"><label>اسم الموقع الحالي</label><input type="text" id="loc-label" class="form-control" placeholder="مثال: منتزه السودة"></div>
+        <div class="form-group"><label>رابط Google Maps</label><input type="url" id="loc-url" class="form-control" placeholder="https://maps.google.com/..."></div>
+        <div class="form-group"><label>وصف مختصر</label><textarea id="loc-description" class="form-control" rows="2" placeholder="وصف يساعد ولي الأمر على فهم الموقع الحالي"></textarea></div>
+        <div class="grid-2">
+          <div class="form-group"><label>وقت التحديث</label><input type="text" id="loc-update-time" class="form-control" placeholder="مثال: 08:45 م"></div>
+          <div class="form-group"><label>وقت العودة المتوقع إن وجد</label><input type="time" id="loc-return" class="form-control"></div>
+        </div>
+        <div class="form-group"><label>ملاحظة اختيارية</label><input type="text" id="loc-note" class="form-control" placeholder="مثال: قد يتأخر التحديث بسبب ضعف الشبكة"></div>
+        <button class="btn btn-primary" onclick="saveLocation()">💾 تحديث الموقع</button>
+        <p id="loc-status" style="margin-top:12px;font-size:13px;color:var(--success);display:none">✅ تم التحديث — يظهر الآن لأولياء الأمور</p>
+      </div>
+
+      <div class="card" style="max-width:680px;margin-top:20px" id="current-location">
+        <h3 style="margin-bottom:12px;font-weight:700">📍 الموقع الحالي المعروض</h3>
+        <div id="loc-display"><p style="color:var(--text-muted)">لم يتم تحديث الموقع بعد</p></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    document.getElementById('loc-update-time').value = formatTimeArabic(new Date());
+
+    db.collection('location').doc('current').onSnapshot(doc => {
+      if (!doc.exists) return;
+      const d = doc.data();
+      document.getElementById('loc-label').value = d.label || d.name || '';
+      document.getElementById('loc-url').value = d.url || '';
+      document.getElementById('loc-description').value = d.description || '';
+      document.getElementById('loc-update-time').value = d.updateTimeText || d.updatedAtText || formatTimeArabic(d.updatedAt || new Date());
+      document.getElementById('loc-return').value = d.returnTime || '';
+      document.getElementById('loc-note').value = d.note || '';
+      renderLocation(d);
+    });
+
+    function renderLocation(d) {
+      const updated = d.updatedAtText || formatDateTimeArabic(d.updatedAt) || d.updateTimeText || 'غير محدد';
+      document.getElementById('loc-display').innerHTML = `
+        <p><strong>${escapeHtml(d.label || d.name || 'غير محدد')}</strong></p>
+        ${d.description ? `<p style="margin-top:8px">${escapeHtml(d.description)}</p>` : ''}
+        ${d.url ? `<p style="margin-top:8px"><a href="${escapeHtml(d.url)}" target="_blank" class="btn btn-sm btn-primary">🗺️ فتح الموقع على الخريطة</a></p>` : ''}
+        <p style="margin-top:8px;color:var(--text-muted)">آخر تحديث: ${escapeHtml(updated)}</p>
+        <p style="margin-top:4px;color:var(--text-muted)">وقت العودة المتوقع: ${escapeHtml(d.returnTime || 'غير محدد')}</p>
+        ${d.note ? `<p style="margin-top:6px;color:var(--warning)">ملاحظة: ${escapeHtml(d.note)}</p>` : ''}
+      `;
+    }
+
+    async function saveLocation() {
+      const now = new Date();
+      const data = {
+        label: document.getElementById('loc-label').value.trim(),
+        url: document.getElementById('loc-url').value.trim(),
+        description: document.getElementById('loc-description').value.trim(),
+        updateTimeText: document.getElementById('loc-update-time').value.trim() || formatTimeArabic(now),
+        updatedAtText: formatDateTimeArabic(now),
+        returnTime: document.getElementById('loc-return').value,
+        note: document.getElementById('loc-note').value.trim(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      await db.collection('location').doc('current').set(data, { merge: true });
+      document.getElementById('loc-status').style.display = 'block';
+      showToast('تم تحديث الموقع');
+      setTimeout(() => document.getElementById('loc-status').style.display = 'none', 3000);
+    }
+  </script>
+</body>
+</html>

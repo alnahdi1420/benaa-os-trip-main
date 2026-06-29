@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — المشرفون</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a>
+      <a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a>
+      <a href="supervisors.html" class="sidebar-link active">👨‍💼 المشرفون</a>
+      <a href="groups.html" class="sidebar-link">👥 المجموعات</a>
+      <a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a>
+      <a href="location.html" class="sidebar-link">📍 الموقع</a>
+      <a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a>
+      <a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a>
+      <a href="points.html" class="sidebar-link">⭐ النقاط</a>
+      <a href="tasks.html" class="sidebar-link">📋 المهام</a>
+      <a href="notifications.html" class="sidebar-link">📢 الإشعارات</a>
+      <a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a>
+      <a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a>
+      <a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a>
+      <a href="invoices.html" class="sidebar-link">🧾 الفواتير</a>
+      <a href="budget.html" class="sidebar-link">💰 الميزانية</a>
+      <a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0">
+      <a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>👨‍💼 إدارة المشرفين</h1>
+        <button class="btn btn-primary" onclick="openAddModal()">+ إضافة مشرف</button>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr><th>الكود</th><th>الاسم</th><th>الدور</th><th>المجموعة</th><th>عدد الطلاب</th><th>واتساب</th><th>إجراءات</th></tr>
+          </thead>
+          <tbody id="supervisors-table"></tbody>
+        </table>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="sup-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">إضافة مشرف</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <form id="sup-form" onsubmit="saveSupervisor(event)">
+        <input type="hidden" id="sup-id">
+        <div class="form-group">
+          <label>اسم المشرف</label>
+          <input type="text" id="sup-name" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>الدور</label>
+          <select id="sup-role" class="form-control" required>
+            <option value="supervisor">مشرف عادي</option>
+            <option value="head_supervisor">مشرف عام</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>المجموعة</label>
+          <select id="sup-group" class="form-control"></select>
+        </div>
+        <div class="form-group">
+          <label>رقم الواتساب</label>
+          <input type="tel" id="sup-phone" class="form-control" placeholder="05XXXXXXXX">
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    let allSupervisors = [], allGroups = [], allStudents = [];
+
+    db.collection('groups').onSnapshot(snap => {
+      allGroups = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      document.getElementById('sup-group').innerHTML = '<option value="">بدون مجموعة</option>' + allGroups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+    });
+
+    db.collection('students').onSnapshot(snap => {
+      allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderTable();
+    });
+
+    db.collection('supervisors').onSnapshot(snap => {
+      allSupervisors = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderTable();
+    });
+
+    function renderTable() {
+      const tbody = document.getElementById('supervisors-table');
+      if (allSupervisors.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted)">لا يوجد مشرفون</td></tr>';
+        return;
+      }
+      tbody.innerHTML = allSupervisors.map(s => {
+        const group = allGroups.find(g => g.id === s.groupId);
+        const studentCount = allStudents.filter(st => st.supervisorId === s.id).length;
+        const roleLabel = s.role === 'head_supervisor' ? '<span class="badge-status badge-approved">مشرف عام</span>' : 'مشرف عادي';
+        return `<tr>
+          <td><code style="background:var(--primary-glow);padding:2px 8px;border-radius:4px">${s.code || '-'}</code></td>
+          <td style="font-weight:600">${s.name}</td>
+          <td>${roleLabel}</td>
+          <td>${group ? group.name : '-'}</td>
+          <td>${studentCount}</td>
+          <td>${s.phone || '-'}</td>
+          <td>
+            <button class="btn btn-sm btn-secondary" onclick="editSup('${s.id}')">تعديل</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteSup('${s.id}','${s.name}')">حذف</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function openAddModal() {
+      document.getElementById('modal-title').textContent = 'إضافة مشرف';
+      document.getElementById('sup-form').reset();
+      document.getElementById('sup-id').value = '';
+      document.getElementById('sup-modal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('sup-modal').classList.remove('active');
+    }
+
+    function editSup(id) {
+      const s = allSupervisors.find(sp => sp.id === id);
+      if (!s) return;
+      document.getElementById('modal-title').textContent = 'تعديل مشرف';
+      document.getElementById('sup-id').value = id;
+      document.getElementById('sup-name').value = s.name;
+      document.getElementById('sup-role').value = s.role || 'supervisor';
+      document.getElementById('sup-group').value = s.groupId || '';
+      document.getElementById('sup-phone').value = s.phone || '';
+      document.getElementById('sup-modal').classList.add('active');
+    }
+
+    async function saveSupervisor(e) {
+      e.preventDefault();
+      const id = document.getElementById('sup-id').value;
+      const data = {
+        name: document.getElementById('sup-name').value.trim(),
+        role: document.getElementById('sup-role').value,
+        groupId: document.getElementById('sup-group').value,
+        phone: document.getElementById('sup-phone').value.trim()
+      };
+      try {
+        if (id) {
+          await db.collection('supervisors').doc(id).update(data);
+          showToast('تم تحديث بيانات المشرف');
+        } else {
+          const count = allSupervisors.length + 1;
+          data.code = 'SUP-' + String(count).padStart(3, '0');
+          data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          await db.collection('supervisors').add(data);
+          showToast('تمت إضافة المشرف بنجاح');
+        }
+        closeModal();
+      } catch(err) {
+        showToast('حدث خطأ: ' + err.message, 'error');
+      }
+    }
+
+    async function deleteSup(id, name) {
+      if (!confirm(`هل تريد حذف المشرف "${name}"؟`)) return;
+      try {
+        await db.collection('supervisors').doc(id).delete();
+        showToast('تم حذف المشرف');
+      } catch(err) {
+        showToast('خطأ في الحذف', 'error');
+      }
+    }
+  </script>
+</body>
+</html>

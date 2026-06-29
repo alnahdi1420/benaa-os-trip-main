@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — المركز الإعلامي</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a><a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a><a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a><a href="groups.html" class="sidebar-link">👥 المجموعات</a><a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a><a href="location.html" class="sidebar-link">📍 الموقع</a><a href="media.html" class="sidebar-link active">📸 المركز الإعلامي</a><a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a><a href="points.html" class="sidebar-link">⭐ النقاط</a><a href="tasks.html" class="sidebar-link">📋 المهام</a><a href="notifications.html" class="sidebar-link">📢 الإشعارات</a><a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a><a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a><a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a><a href="invoices.html" class="sidebar-link">🧾 الفواتير</a><a href="budget.html" class="sidebar-link">💰 الميزانية</a><a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0"><a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>📸 المركز الإعلامي</h1>
+        <button class="btn btn-primary" onclick="openUploadModal()">+ رفع مشاركة</button>
+      </div>
+
+      <div class="filters">
+        <input type="date" id="filter-date" class="filter-select" onchange="filterMedia()" title="فلتر التاريخ">
+        <select id="filter-type" class="filter-select" onchange="filterMedia()"><option value="">كل الأنواع</option><option value="image">صور</option><option value="video">فيديو</option></select>
+        <select id="filter-status" class="filter-select" onchange="filterMedia()"><option value="">كل الحالات</option><option value="pending">قيد المراجعة</option><option value="approved">معتمدة</option><option value="rejected">مرفوضة</option></select>
+        <select id="filter-group" class="filter-select" onchange="filterMedia()"><option value="">كل المجموعات</option></select>
+        <select id="filter-student" class="filter-select" onchange="filterMedia()"><option value="">كل الطلاب</option></select>
+        <button class="btn btn-sm btn-secondary" onclick="clearMediaFilters()">مسح الفلاتر</button>
+      </div>
+
+      <div class="grid-3" id="media-grid"></div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="upload-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>رفع مشاركة إعلامية</h3><button class="modal-close" onclick="closeUploadModal()">&times;</button></div>
+      <form id="upload-form" onsubmit="uploadMedia(event)">
+        <div class="form-group"><label>الطالب</label><select id="upload-student" class="form-control" required></select></div>
+        <div class="form-group"><label>النوع</label><select id="upload-type" class="form-control"><option value="image">صورة</option><option value="video">فيديو</option></select></div>
+        <div class="form-group"><label>الملف</label><input type="file" id="upload-file" class="form-control" accept="image/*,video/*" required></div>
+        <div class="form-group"><label>وصف مختصر</label><input type="text" id="upload-desc" class="form-control"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%" id="upload-btn">رفع</button>
+        <div id="upload-progress" style="display:none;margin-top:12px;text-align:center;color:var(--primary)">جاري الرفع...</div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    let allMedia = [], allStudents = [], allGroups = [], allSupervisors = [];
+
+    db.collection('groups').onSnapshot(snap => {
+      allGroups = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      document.getElementById('filter-group').innerHTML = '<option value="">كل المجموعات</option>' + allGroups.map(g => `<option value="${g.id}">${escapeHtml(g.name || '')}</option>`).join('');
+      filterMedia();
+    });
+
+    db.collection('students').onSnapshot(snap => {
+      allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const opts = allStudents.map(s => `<option value="${s.id}" data-group="${escapeHtml(s.groupId || '')}" data-sup="${escapeHtml(s.supervisorId || '')}">${escapeHtml(s.name || '')}</option>`).join('');
+      document.getElementById('upload-student').innerHTML = '<option value="">اختر الطالب</option>' + opts;
+      document.getElementById('filter-student').innerHTML = '<option value="">كل الطلاب</option>' + opts;
+      filterMedia();
+    });
+
+    db.collection('supervisors').onSnapshot(snap => {
+      allSupervisors = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      filterMedia();
+    });
+
+    db.collection('media').onSnapshot(snap => {
+      allMedia = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sortByCreatedDesc);
+      filterMedia();
+    });
+
+    function clearMediaFilters() {
+      ['filter-date','filter-type','filter-status','filter-group','filter-student'].forEach(id => document.getElementById(id).value = '');
+      filterMedia();
+    }
+
+    function nameFrom(list, id) { return (list.find(x => x.id === id) || {}).name || '-'; }
+
+    function filterMedia() {
+      const dateKey = document.getElementById('filter-date').value;
+      const type = document.getElementById('filter-type').value;
+      const status = document.getElementById('filter-status').value;
+      const group = document.getElementById('filter-group').value;
+      const student = document.getElementById('filter-student').value;
+      const filtered = allMedia.filter(m => {
+        if (dateKey && !isMediaFromSelectedDate(m, dateKey)) return false;
+        if (type && m.type !== type) return false;
+        if (status && m.status !== status) return false;
+        if (group && m.groupId !== group) return false;
+        if (student && m.studentId !== student) return false;
+        return true;
+      });
+
+      const grid = document.getElementById('media-grid');
+      if (filtered.length === 0) {
+        grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📸</div><p>لا توجد مشاركات حسب الفلاتر الحالية</p></div>';
+        return;
+      }
+      grid.innerHTML = filtered.map(m => {
+        const badge = m.status === 'approved' ? '<span class="badge-status badge-approved">✅ معتمدة</span>' : m.status === 'rejected' ? '<span class="badge-status badge-rejected">❌ مرفوضة</span>' : '<span class="badge-status badge-pending">🟡 قيد المراجعة</span>';
+        const best = m.isBestPhoto ? '🏆 أفضل صورة لهذا اليوم' : m.isBestVideo ? '🏆 أفضل فيديو لهذا اليوم' : '';
+        const date = getMediaDateKey(m) || '-';
+        const time = m.timeText || formatTimeArabic(m.createdAt) || '';
+        const groupName = nameFrom(allGroups, m.groupId);
+        const supervisorName = m.supervisorName || nameFrom(allSupervisors, m.supervisorId);
+        const preview = m.type === 'image' ? `<img src="${escapeHtml(m.url || '')}" style="width:100%;height:100%;object-fit:cover" onerror="this.parentElement.innerHTML='<div style=\'display:flex;align-items:center;justify-content:center;height:100%;font-size:48px\'>📸</div>'">` : `<iframe src="${escapeHtml(m.previewUrl || m.url || '')}" style="width:100%;height:100%;border:none" allow="autoplay"></iframe>`;
+        return `<div class="card">
+          <div style="height:180px;border-radius:16px;overflow:hidden;margin-bottom:12px;background:var(--surface-2)">${preview}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px">${badge}${best ? `<span style="font-size:12px;color:var(--accent);font-weight:800">${best}</span>` : ''}</div>
+          <p style="font-weight:800;font-size:14px">${escapeHtml(m.studentName || 'طالب')}</p>
+          <p style="font-size:12px;color:var(--text-muted)">${escapeHtml(m.description || '')}</p>
+          <div class="meta-line"><span>👥 ${escapeHtml(groupName)}</span><span>👨‍💼 ${escapeHtml(supervisorName)}</span></div>
+          <div class="meta-line"><span>📅 ${escapeHtml(date)}</span><span>🕘 ${escapeHtml(time)}</span><span>${m.type === 'image' ? 'صورة' : 'فيديو'}</span></div>
+          ${m.rejectionReason ? `<p style="font-size:12px;color:var(--danger);margin-top:4px">سبب الرفض: ${escapeHtml(m.rejectionReason)}</p>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    function openUploadModal() { document.getElementById('upload-modal').classList.add('active'); }
+    function closeUploadModal() { document.getElementById('upload-modal').classList.remove('active'); }
+
+    async function uploadMedia(e) {
+      e.preventDefault();
+      const studentId = document.getElementById('upload-student').value;
+      const student = allStudents.find(s => s.id === studentId);
+      if (!student) return showToast('اختر طالباً', 'error');
+      const file = document.getElementById('upload-file').files[0];
+      if (!file) return showToast('اختر ملفاً', 'error');
+
+      const type = document.getElementById('upload-type').value;
+      const description = document.getElementById('upload-desc').value.trim();
+      const dateKey = getTodayKey();
+      const timeText = formatTimeArabic(new Date());
+
+      document.getElementById('upload-btn').disabled = true;
+      document.getElementById('upload-progress').style.display = 'block';
+      try {
+        const uploaded = await uploadFileToDrive(file, { studentId, studentName: student.name, groupId: student.groupId || '', supervisorId: student.supervisorId || '', type, description, dateKey, timeText });
+        const sup = allSupervisors.find(s => s.id === student.supervisorId);
+        await db.collection('media').add({
+          studentId, studentName: student.name || '', groupId: student.groupId || '', supervisorId: student.supervisorId || '', supervisorName: sup ? sup.name : '',
+          type, description, url: uploaded.url, previewUrl: uploaded.previewUrl || uploaded.url, fileId: uploaded.fileId || '',
+          status: 'pending', source: 'admin', dateKey, timeText,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        showToast('تم رفع المشاركة بنجاح — بانتظار الاعتماد');
+        closeUploadModal();
+        document.getElementById('upload-form').reset();
+      } catch(err) {
+        showToast('خطأ في الرفع: ' + err.message, 'error');
+      }
+      document.getElementById('upload-btn').disabled = false;
+      document.getElementById('upload-progress').style.display = 'none';
+    }
+  </script>
+</body>
+</html>

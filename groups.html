@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — المجموعات</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a>
+      <a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a>
+      <a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a>
+      <a href="groups.html" class="sidebar-link active">👥 المجموعات</a>
+      <a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a>
+      <a href="location.html" class="sidebar-link">📍 الموقع</a>
+      <a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a>
+      <a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a>
+      <a href="points.html" class="sidebar-link">⭐ النقاط</a>
+      <a href="tasks.html" class="sidebar-link">📋 المهام</a>
+      <a href="notifications.html" class="sidebar-link">📢 الإشعارات</a>
+      <a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a>
+      <a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a>
+      <a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a>
+      <a href="invoices.html" class="sidebar-link">🧾 الفواتير</a>
+      <a href="budget.html" class="sidebar-link">💰 الميزانية</a>
+      <a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0">
+      <a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>👥 إدارة المجموعات</h1>
+        <button class="btn btn-primary" onclick="openAddModal()">+ إضافة مجموعة</button>
+      </div>
+
+      <div class="grid-3" id="groups-container">
+        <div class="skeleton-card"><div class="skeleton-line w-60"></div><div class="skeleton-line w-40"></div><div class="skeleton-line w-80"></div></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div class="modal-overlay" id="group-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">إضافة مجموعة</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <form id="group-form" onsubmit="saveGroup(event)">
+        <input type="hidden" id="group-id">
+        <div class="form-group">
+          <label>اسم المجموعة</label>
+          <input type="text" id="group-name" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>المشرف المسؤول</label>
+          <select id="group-supervisor" class="form-control"></select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Students Drawer Modal -->
+  <div class="modal-overlay" id="students-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="students-modal-title">طلاب المجموعة</h3>
+        <button class="modal-close" onclick="document.getElementById('students-modal').classList.remove('active')">&times;</button>
+      </div>
+      <div id="students-list"></div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    let allGroups = [], allSupervisors = [], allStudents = [];
+
+    db.collection('supervisors').onSnapshot(snap => {
+      allSupervisors = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      document.getElementById('group-supervisor').innerHTML = '<option value="">بدون مشرف</option>' + allSupervisors.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    });
+
+    db.collection('students').onSnapshot(snap => {
+      allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderGroups();
+    });
+
+    db.collection('groups').orderBy('points', 'desc').onSnapshot(snap => {
+      allGroups = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderGroups();
+    });
+
+    function renderGroups() {
+      const container = document.getElementById('groups-container');
+      if (allGroups.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div><p>لا توجد مجموعات — أضف مجموعة جديدة</p></div>';
+        return;
+      }
+      container.innerHTML = allGroups.map((g, i) => {
+        const sup = allSupervisors.find(s => s.id === g.supervisorId);
+        const students = allStudents.filter(s => s.groupId === g.id);
+        const isFirst = i === 0 && (g.points || 0) > 0;
+        return `<div class="card" style="${isFirst ? 'border:2px solid var(--accent);background:var(--accent-light)' : ''}" onclick="showStudents('${g.id}','${g.name}')">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <h3 style="font-size:16px;font-weight:700">${isFirst ? '👑 ' : ''}${g.name}</h3>
+            <span style="font-size:13px;color:var(--text-muted)">#${i+1}</span>
+          </div>
+          <div style="display:flex;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+            <div><span style="font-size:12px;color:var(--text-muted)">النقاط</span><div style="font-size:22px;font-weight:800;color:var(--primary)">${g.points || 0}</div></div>
+            <div><span style="font-size:12px;color:var(--text-muted)">الطلاب</span><div style="font-size:22px;font-weight:800">${students.length}</div></div>
+          </div>
+          <p style="font-size:13px;color:var(--text-muted)">المشرف: ${sup ? sup.name : 'غير محدد'}</p>
+          <div style="margin-top:12px;display:flex;gap:8px">
+            <button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();editGroup('${g.id}')">تعديل</button>
+            <button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteGroup('${g.id}','${g.name}')">حذف</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function showStudents(groupId, groupName) {
+      const students = allStudents.filter(s => s.groupId === groupId);
+      document.getElementById('students-modal-title').textContent = 'طلاب ' + groupName;
+      const list = document.getElementById('students-list');
+      if (students.length === 0) {
+        list.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:20px">لا يوجد طلاب في هذه المجموعة</p>';
+      } else {
+        list.innerHTML = students.map(s => `<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)"><div><div style="font-weight:600">${s.name}</div><div style="font-size:12px;color:var(--text-muted)">${s.code || ''}</div></div><div style="font-weight:700;color:var(--primary)">${s.points || 0} نقطة</div></div>`).join('');
+      }
+      document.getElementById('students-modal').classList.add('active');
+    }
+
+    function openAddModal() {
+      document.getElementById('modal-title').textContent = 'إضافة مجموعة';
+      document.getElementById('group-form').reset();
+      document.getElementById('group-id').value = '';
+      document.getElementById('group-modal').classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('group-modal').classList.remove('active');
+    }
+
+    function editGroup(id) {
+      const g = allGroups.find(gr => gr.id === id);
+      if (!g) return;
+      document.getElementById('modal-title').textContent = 'تعديل مجموعة';
+      document.getElementById('group-id').value = id;
+      document.getElementById('group-name').value = g.name;
+      document.getElementById('group-supervisor').value = g.supervisorId || '';
+      document.getElementById('group-modal').classList.add('active');
+    }
+
+    async function saveGroup(e) {
+      e.preventDefault();
+      const id = document.getElementById('group-id').value;
+      const data = {
+        name: document.getElementById('group-name').value.trim(),
+        supervisorId: document.getElementById('group-supervisor').value
+      };
+      try {
+        if (id) {
+          await db.collection('groups').doc(id).update(data);
+          showToast('تم تحديث المجموعة');
+        } else {
+          data.points = 0;
+          data.rank = 0;
+          data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          await db.collection('groups').add(data);
+          showToast('تمت إضافة المجموعة');
+        }
+        closeModal();
+      } catch(err) {
+        showToast('حدث خطأ', 'error');
+      }
+    }
+
+    async function deleteGroup(id, name) {
+      if (!confirm(`هل تريد حذف المجموعة "${name}"؟`)) return;
+      await db.collection('groups').doc(id).delete();
+      showToast('تم حذف المجموعة');
+    }
+  </script>
+</body>
+</html>

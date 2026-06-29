@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — الإشعارات</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a><a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a><a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a><a href="groups.html" class="sidebar-link">👥 المجموعات</a><a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a><a href="location.html" class="sidebar-link">📍 الموقع</a><a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a><a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a><a href="points.html" class="sidebar-link">⭐ النقاط</a><a href="tasks.html" class="sidebar-link">📋 المهام</a><a href="notifications.html" class="sidebar-link active">📢 الإشعارات</a><a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a><a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a><a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a><a href="invoices.html" class="sidebar-link">🧾 الفواتير</a><a href="budget.html" class="sidebar-link">💰 الميزانية</a><a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0"><a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header"><h1>📢 الإشعارات والرسائل</h1></div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="showTab('send-tab', event)">إرسال إشعار</button>
+        <button class="tab" onclick="showTab('inbox-tab', event)">صندوق الوارد <span id="unread-badge" style="background:var(--danger);color:white;border-radius:50%;padding:2px 6px;font-size:11px;margin-right:4px;display:none">0</span></button>
+        <button class="tab" onclick="showTab('sent-tab', event)">الإشعارات المرسلة</button>
+      </div>
+
+      <div id="send-tab">
+        <div class="card" style="max-width:600px">
+          <form onsubmit="sendNotification(event)">
+            <div class="form-group"><label>العنوان</label><input type="text" id="notif-title" class="form-control" required></div>
+            <div class="form-group"><label>النص</label><textarea id="notif-message" class="form-control" required></textarea></div>
+            <div class="form-group">
+              <label>الاستهداف</label>
+              <select id="notif-target" class="form-control" onchange="updateTargetSelect()">
+                <option value="all">الجميع</option>
+                <option value="all_parents">جميع أولياء الأمور</option>
+                <option value="all_students">جميع الطلاب</option>
+                <option value="all_supervisors">جميع المشرفين</option>
+                <option value="group">مجموعة معينة</option>
+                <option value="student">طالب محدد</option>
+              </select>
+            </div>
+            <div class="form-group" id="target-select-group" style="display:none"><label>اختر</label><select id="notif-target-id" class="form-control"></select></div>
+            <button type="submit" class="btn btn-primary" style="width:100%">📢 إرسال</button>
+          </form>
+        </div>
+      </div>
+
+      <div id="inbox-tab" style="display:none"><div id="inbox-list"></div></div>
+      <div id="sent-tab" style="display:none"><div id="sent-list"></div></div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="reply-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>رد على الرسالة</h3><button class="modal-close" onclick="document.getElementById('reply-modal').classList.remove('active')">&times;</button></div>
+      <input type="hidden" id="reply-message-id">
+      <div class="form-group"><label>الرد</label><textarea id="reply-text" class="form-control" required></textarea></div>
+      <button class="btn btn-primary" style="width:100%" onclick="sendReply()">إرسال الرد</button>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    let allStudents = [], allGroups = [], adminInbox = [];
+
+    db.collection('students').onSnapshot(snap => { allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() })); updateTargetSelect(); });
+    db.collection('groups').onSnapshot(snap => { allGroups = snap.docs.map(d => ({ id: d.id, ...d.data() })); updateTargetSelect(); });
+
+    function showTab(id, ev) {
+      ['send-tab','inbox-tab','sent-tab'].forEach(tab => document.getElementById(tab).style.display = 'none');
+      document.getElementById(id).style.display = 'block';
+      document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+      if (ev && ev.target) ev.target.classList.add('active');
+    }
+
+    function updateTargetSelect() {
+      const type = document.getElementById('notif-target').value;
+      const group = document.getElementById('target-select-group');
+      const sel = document.getElementById('notif-target-id');
+      if (!group || !sel) return;
+      if (type === 'group') {
+        group.style.display = 'block';
+        sel.innerHTML = allGroups.map(g => `<option value="${g.id}">${escapeHtml(g.name || '')}</option>`).join('');
+      } else if (type === 'student') {
+        group.style.display = 'block';
+        sel.innerHTML = allStudents.map(s => `<option value="${s.id}">${escapeHtml(s.name || '')}</option>`).join('');
+      } else {
+        group.style.display = 'none';
+      }
+    }
+
+    async function sendNotification(e) {
+      e.preventDefault();
+      const targetType = document.getElementById('notif-target').value;
+      const data = {
+        title: document.getElementById('notif-title').value.trim(),
+        message: document.getElementById('notif-message').value.trim(),
+        targetType,
+        targetId: ['group','student'].includes(targetType) ? document.getElementById('notif-target-id').value : '',
+        createdByRole: 'admin',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      await db.collection('notifications').add(data);
+      await addTimelineEvent(`📢 إشعار جديد: ${data.title}`, 'info');
+      showToast('تم إرسال الإشعار');
+      document.getElementById('notif-title').value = '';
+      document.getElementById('notif-message').value = '';
+    }
+
+    db.collection('messages').where('toRole', '==', 'admin').onSnapshot(snap => {
+      adminInbox = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sortByCreatedDesc);
+      renderInbox();
+    });
+
+    function renderInbox() {
+      const list = document.getElementById('inbox-list');
+      const unread = adminInbox.filter(m => !m.read).length;
+      const badge = document.getElementById('unread-badge');
+      if (unread > 0) { badge.textContent = unread; badge.style.display = 'inline'; } else { badge.style.display = 'none'; }
+      if (adminInbox.length === 0) { list.innerHTML = '<div class="empty-state"><div class="empty-icon">📬</div><p>لا توجد رسائل واردة</p></div>'; return; }
+      list.innerHTML = adminInbox.map(m => {
+        const roleLabel = m.fromRole === 'parent' ? 'ولي أمر' : m.fromRole === 'supervisor' ? 'مشرف' : m.fromRole || 'مرسل';
+        return `<div class="card" style="margin-bottom:12px;${!m.read ? 'border-right:4px solid var(--primary)' : ''}">
+          <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
+            <div>
+              <p style="font-weight:800;font-size:14px">رسالة من ${roleLabel}: ${escapeHtml(m.fromName || m.from || 'مجهول')}</p>
+              ${m.studentName ? `<p style="font-size:12px;color:var(--text-muted)">الطالب: ${escapeHtml(m.studentName)}</p>` : ''}
+              <p style="font-size:14px;margin-top:8px">${escapeHtml(m.content || '')}</p>
+              <p style="font-size:12px;color:var(--text-muted);margin-top:4px">${escapeHtml(formatDateTimeArabic(m.createdAt))}</p>
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              ${!m.read ? `<button class="btn btn-sm btn-secondary" onclick="markRead('${m.id}')">قرأت</button>` : ''}
+              <button class="btn btn-sm btn-primary" onclick="openReply('${m.id}')">رد</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    db.collection('notifications').onSnapshot(snap => {
+      const list = document.getElementById('sent-list');
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sortByCreatedDesc).slice(0, 50);
+      if (docs.length === 0) { list.innerHTML = '<div class="empty-state"><p>لا توجد إشعارات مرسلة</p></div>'; return; }
+      list.innerHTML = docs.map(n => {
+        const targetLabel = n.targetType === 'all' ? 'الجميع' : n.targetType === 'all_parents' ? 'أولياء الأمور' : n.targetType === 'all_students' ? 'الطلاب' : n.targetType === 'all_supervisors' ? 'المشرفين' : n.targetType === 'group' ? 'مجموعة' : 'طالب';
+        return `<div class="card" style="margin-bottom:12px"><h4 style="font-size:15px;font-weight:800">${escapeHtml(n.title || '')}</h4><p style="font-size:14px;margin-top:4px">${escapeHtml(n.message || '')}</p><p style="font-size:12px;color:var(--text-muted);margin-top:4px">الاستهداف: ${targetLabel}</p></div>`;
+      }).join('');
+    });
+
+    async function markRead(id) { await db.collection('messages').doc(id).update({ read: true }); }
+
+    function openReply(messageId) {
+      document.getElementById('reply-message-id').value = messageId;
+      document.getElementById('reply-text').value = '';
+      document.getElementById('reply-modal').classList.add('active');
+    }
+
+    async function sendReply() {
+      const messageId = document.getElementById('reply-message-id').value;
+      const original = adminInbox.find(m => m.id === messageId);
+      const content = document.getElementById('reply-text').value.trim();
+      if (!original || !content) return showToast('اكتب الرد أولاً', 'error');
+
+      const reply = {
+        from: 'الإدارة', fromName: 'الإدارة', fromRole: 'admin', fromId: 'admin',
+        content, read: false,
+        replyToMessageId: messageId,
+        threadId: original.threadId || '',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      if (original.fromRole === 'parent') {
+        reply.toRole = 'parent';
+        reply.to = original.fromName || original.from || 'ولي الأمر';
+        reply.parentPhone = original.parentPhone || '';
+        reply.studentId = original.studentId || '';
+        reply.studentName = original.studentName || '';
+        reply.groupId = original.groupId || '';
+        reply.supervisorId = original.supervisorId || '';
+        reply.threadId = original.threadId || makeParentThreadId(original.parentPhone, original.studentId, 'admin', '');
+      } else if (original.fromRole === 'supervisor') {
+        reply.toRole = 'supervisor';
+        reply.toId = original.fromId || '';
+        reply.to = original.fromName || original.from || 'المشرف';
+      } else {
+        reply.toRole = original.fromRole || 'parent';
+        reply.to = original.fromName || original.from || '';
+      }
+
+      await db.collection('messages').add(reply);
+      await db.collection('messages').doc(messageId).update({ read: true }).catch(() => {});
+      document.getElementById('reply-modal').classList.remove('active');
+      showToast('تم إرسال الرد');
+    }
+  </script>
+</body>
+</html>

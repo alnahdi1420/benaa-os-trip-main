@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — المهام</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a><a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a><a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a><a href="groups.html" class="sidebar-link">👥 المجموعات</a><a href="schedule.html" class="sidebar-link">📅 جدول الأنشطة</a><a href="location.html" class="sidebar-link">📍 الموقع</a><a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a><a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a><a href="points.html" class="sidebar-link">⭐ النقاط</a><a href="tasks.html" class="sidebar-link active">📋 المهام</a><a href="notifications.html" class="sidebar-link">📢 الإشعارات</a><a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a><a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a><a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a><a href="invoices.html" class="sidebar-link">🧾 الفواتير</a><a href="budget.html" class="sidebar-link">💰 الميزانية</a><a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0"><a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header"><h1>📋 المهام</h1><button class="btn btn-primary" onclick="openTaskModal()">+ إنشاء مهمة</button></div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="filterTasks('all', event)">الكل</button>
+        <button class="tab" onclick="filterTasks('new', event)">جديدة</button>
+        <button class="tab" onclick="filterTasks('in_progress', event)">قيد التنفيذ</button>
+        <button class="tab" onclick="filterTasks('done', event)">تنتظر اعتماد</button>
+        <button class="tab" onclick="filterTasks('approved', event)">معتمدة</button>
+      </div>
+
+      <div class="grid-2" id="tasks-list"></div>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="task-modal">
+    <div class="modal">
+      <div class="modal-header"><h3>إنشاء مهمة</h3><button class="modal-close" onclick="closeTaskModal()">&times;</button></div>
+      <form id="admin-task-form" onsubmit="saveTask(event)">
+        <div class="form-group"><label>العنوان</label><input type="text" id="task-title" class="form-control" required></div>
+        <div class="form-group"><label>الوصف</label><textarea id="task-desc" class="form-control"></textarea></div>
+        <div class="form-group"><label>النوع</label><select id="task-type" class="form-control" onchange="updateTargetList()"><option value="group">مجموعة</option><option value="student">طالب</option></select></div>
+        <div class="form-group"><label>الهدف</label><select id="task-target" class="form-control" required></select></div>
+        <div class="form-group"><label>النقاط</label><input type="number" id="task-points" class="form-control" min="0" value="10"></div>
+        <div class="form-group"><label>الموعد النهائي</label><input type="datetime-local" id="task-deadline" class="form-control"></div>
+        <button type="submit" class="btn btn-primary" style="width:100%">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    let allTasks = [], allStudents = [], allGroups = [], currentFilter = 'all';
+
+    db.collection('students').onSnapshot(snap => { allStudents = snap.docs.map(d => ({ id: d.id, ...d.data() })); updateTargetList(); renderTasks(); });
+    db.collection('groups').onSnapshot(snap => { allGroups = snap.docs.map(d => ({ id: d.id, ...d.data() })); updateTargetList(); renderTasks(); });
+    db.collection('tasks').onSnapshot(snap => { allTasks = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(sortByCreatedDesc); renderTasks(); });
+
+    function updateTargetList() {
+      const type = document.getElementById('task-type').value;
+      const sel = document.getElementById('task-target');
+      if (!sel) return;
+      sel.innerHTML = type === 'group'
+        ? allGroups.map(g => `<option value="${g.id}">${escapeHtml(g.name || '')}</option>`).join('')
+        : allStudents.map(s => `<option value="${s.id}">${escapeHtml(s.name || '')}</option>`).join('');
+    }
+
+    function filterTasks(status, ev) {
+      currentFilter = status;
+      document.querySelectorAll('.tabs .tab').forEach(t => t.classList.remove('active'));
+      if (ev && ev.target) ev.target.classList.add('active');
+      renderTasks();
+    }
+
+    function getTargetName(t) {
+      if (t.targetType === 'group') return (allGroups.find(g => g.id === (t.targetId || t.groupId)) || {}).name || '-';
+      return (allStudents.find(s => s.id === t.targetId) || {}).name || '-';
+    }
+
+    function renderTasks() {
+      const filtered = currentFilter === 'all' ? allTasks : allTasks.filter(t => t.status === currentFilter);
+      const container = document.getElementById('tasks-list');
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon">📋</div><p>لا توجد مهام</p></div>';
+        return;
+      }
+      container.innerHTML = filtered.map(t => {
+        const statusBadge = t.status === 'new' ? '<span class="badge-status badge-pending">🆕 جديدة</span>' : t.status === 'in_progress' ? '<span class="badge-status" style="background:var(--info-bg);color:var(--info)">🔄 قيد التنفيذ</span>' : t.status === 'done' ? '<span class="badge-status badge-pending">⏳ تنتظر اعتماد</span>' : '<span class="badge-status badge-approved">✅ معتمدة</span>';
+        const source = t.createdByRole === 'supervisor' ? `مشرف: ${escapeHtml(t.createdByName || '')}` : 'إدارة';
+        const targetName = getTargetName(t);
+        return `<div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;gap:8px"><h3 style="font-size:16px;font-weight:800">${escapeHtml(t.title || '')}</h3>${statusBadge}</div>
+          <p style="font-size:13px;color:var(--text-muted);margin-bottom:8px">${escapeHtml(t.description || '')}</p>
+          <div class="meta-line"><span>🎯 ${t.targetType === 'group' ? 'مجموعة' : 'طالب'}: ${escapeHtml(targetName)}</span><span>⭐ ${t.points || 0} نقاط</span><span>المصدر: ${source}</span>${t.deadline ? `<span>⏰ ${escapeHtml(t.deadline)}</span>` : ''}</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">
+            ${t.status === 'done' ? `<button class="btn btn-sm btn-success" onclick="approveTask('${t.id}','${t.targetType}','${t.targetId || ''}','${t.groupId || ''}',${Number(t.points || 0)})">✅ اعتماد</button>` : ''}
+            ${t.status === 'new' ? `<button class="btn btn-sm btn-secondary" onclick="updateTaskStatus('${t.id}','in_progress')">بدء</button>` : ''}
+            <button class="btn btn-sm btn-danger" onclick="deleteTask('${t.id}')">حذف</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function openTaskModal() { document.getElementById('task-modal').classList.add('active'); updateTargetList(); }
+    function closeTaskModal() { document.getElementById('task-modal').classList.remove('active'); }
+
+    async function saveTask(e) {
+      e.preventDefault();
+      const targetType = document.getElementById('task-type').value;
+      const targetId = document.getElementById('task-target').value;
+      const student = allStudents.find(s => s.id === targetId);
+      const data = {
+        title: document.getElementById('task-title').value.trim(),
+        description: document.getElementById('task-desc').value.trim(),
+        targetType,
+        targetId,
+        groupId: targetType === 'group' ? targetId : (student ? (student.groupId || '') : ''),
+        points: parseInt(document.getElementById('task-points').value || '0', 10),
+        deadline: document.getElementById('task-deadline').value,
+        status: 'new',
+        createdByRole: 'admin',
+        createdById: 'admin',
+        createdByName: 'الإدارة',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      if (!data.title || !data.targetId) return showToast('أكمل الحقول المطلوبة', 'error');
+      await db.collection('tasks').add(data);
+      showToast('تم إنشاء المهمة');
+      document.getElementById('admin-task-form').reset();
+      closeTaskModal();
+    }
+
+    async function updateTaskStatus(id, status) { await db.collection('tasks').doc(id).update({ status }); showToast('تم التحديث'); }
+
+    async function approveTask(id, targetType, targetId, groupId, points) {
+      await db.collection('tasks').doc(id).update({ status: 'approved', approvedBy: 'admin', approvedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      points = Number(points || 0);
+      if (points > 0) {
+        if (targetType === 'group') {
+          await db.collection('groups').doc(targetId || groupId).update({ points: firebase.firestore.FieldValue.increment(points) }).catch(() => {});
+        } else {
+          await db.collection('students').doc(targetId).update({ points: firebase.firestore.FieldValue.increment(points) }).catch(() => {});
+          const student = allStudents.find(s => s.id === targetId);
+          await db.collection('points').add({ studentId: targetId, studentName: student ? student.name : '', groupId: student ? (student.groupId || '') : groupId || '', amount: points, reason: 'اعتماد مهمة', source: 'task', taskId: id, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+        }
+      }
+      await addTimelineEvent(`اعتُمدت مهمة (+${points} نقاط)`, 'task');
+      showToast('تم اعتماد المهمة وإضافة النقاط');
+    }
+
+    async function deleteTask(id) {
+      if (!confirm('حذف هذه المهمة؟')) return;
+      await db.collection('tasks').doc(id).delete();
+      showToast('تم الحذف');
+    }
+  </script>
+</body>
+</html>

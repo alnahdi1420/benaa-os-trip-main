@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Benaa OS — جدول الأنشطة</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <button class="mobile-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+    <nav class="sidebar">
+      <div class="sidebar-logo"><img src="assets/logo.png" alt="شعار الجمعية" class="brand-logo"><span>Benaa OS</span><small>إدارة الرحلة الطلابية</small></div>
+      <a href="dashboard.html" class="sidebar-link">📊 لوحة التحكم</a>
+      <a href="students.html" class="sidebar-link">👨‍🎓 الطلاب</a>
+      <a href="supervisors.html" class="sidebar-link">👨‍💼 المشرفون</a>
+      <a href="groups.html" class="sidebar-link">👥 المجموعات</a>
+      <a href="schedule.html" class="sidebar-link active">📅 جدول الأنشطة</a>
+      <a href="location.html" class="sidebar-link">📍 الموقع</a>
+      <a href="media.html" class="sidebar-link">📸 المركز الإعلامي</a>
+      <a href="media-review.html" class="sidebar-link">✅ مراجعة الإعلام</a>
+      <a href="points.html" class="sidebar-link">⭐ النقاط</a>
+      <a href="tasks.html" class="sidebar-link">📋 المهام</a>
+      <a href="notifications.html" class="sidebar-link">📢 الإشعارات</a>
+      <a href="timeline.html" class="sidebar-link">🕐 سجل الأحداث</a>
+      <a href="daily-report.html" class="sidebar-link">📄 تقرير اليوم</a>
+      <a href="final-report.html" class="sidebar-link">📊 التقرير النهائي</a>
+      <a href="invoices.html" class="sidebar-link">🧾 الفواتير</a>
+      <a href="budget.html" class="sidebar-link">💰 الميزانية</a>
+      <a href="settings.html" class="sidebar-link">⚙️ الإعدادات</a>
+      <hr style="border-color:rgba(255,255,255,0.1);margin:16px 0">
+      <a href="index.html" class="sidebar-link" onclick="sessionStorage.clear()">🚪 تسجيل الخروج</a>
+    </nav>
+
+    <main class="main-content">
+      <div class="page-header">
+        <h1>📅 جدول الأنشطة</h1>
+        <button class="btn btn-primary" onclick="openAddModal()">+ إضافة نشاط</button>
+      </div>
+
+      <div class="filters">
+        <select id="filter-day" class="filter-select" onchange="filterSchedule()">
+          <option value="">كل الأيام</option>
+          <option value="اليوم الأول">اليوم الأول</option>
+          <option value="اليوم الثاني">اليوم الثاني</option>
+          <option value="اليوم الثالث">اليوم الثالث</option>
+          <option value="اليوم الرابع">اليوم الرابع</option>
+          <option value="اليوم الخامس">اليوم الخامس</option>
+        </select>
+        <select id="filter-status" class="filter-select" onchange="filterSchedule()">
+          <option value="">كل الحالات</option>
+          <option value="upcoming">قادم</option>
+          <option value="ongoing">جاري الآن</option>
+          <option value="done">منتهي</option>
+        </select>
+      </div>
+
+      <div id="schedule-list"></div>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div class="modal-overlay" id="schedule-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modal-title">إضافة نشاط</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <form id="schedule-form" onsubmit="saveActivity(event)">
+        <input type="hidden" id="activity-id">
+        <div class="form-group"><label>النشاط</label><input type="text" id="activity-name" class="form-control" required></div>
+        <div class="form-group"><label>الموقع</label><input type="text" id="activity-location" class="form-control"></div>
+        <div class="form-group"><label>اليوم</label><input type="text" id="activity-day" class="form-control" placeholder="مثال: اليوم الأول"></div>
+        <div class="form-group"><label>وقت البداية</label><input type="time" id="activity-start" class="form-control"></div>
+        <div class="form-group"><label>وقت النهاية</label><input type="time" id="activity-end" class="form-control"></div>
+        <div class="form-group">
+          <label>الحالة</label>
+          <select id="activity-status" class="form-control">
+            <option value="upcoming">قادم</option>
+            <option value="ongoing">جاري الآن</option>
+            <option value="done">منتهي</option>
+          </select>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="./firebase.js"></script>
+  <script src="./cloud.js"></script>
+  <script>
+    if (!checkAdminSession()) window.location.href = 'index.html';
+
+    let allActivities = [];
+
+    db.collection('schedule').orderBy('timeStart').onSnapshot(snap => {
+      allActivities = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      filterSchedule();
+    });
+
+    function filterSchedule() {
+      const day = document.getElementById('filter-day').value;
+      const status = document.getElementById('filter-status').value;
+      let filtered = allActivities.filter(a => {
+        if (day && a.day !== day) return false;
+        if (status && a.status !== status) return false;
+        return true;
+      });
+
+      const container = document.getElementById('schedule-list');
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><p>لا توجد أنشطة — أضف نشاطاً جديداً</p></div>';
+        return;
+      }
+
+      container.innerHTML = filtered.map(a => {
+        const statusBadge = a.status === 'ongoing' ? '<span class="badge-status badge-approved">🟢 جاري الآن</span>' : a.status === 'done' ? '<span class="badge-status badge-rejected">✅ منتهي</span>' : '<span class="badge-status badge-pending">⏳ قادم</span>';
+        return `<div class="card" style="margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div>
+              <h3 style="font-size:16px;font-weight:700;margin-bottom:4px">${a.activity}</h3>
+              <p style="font-size:13px;color:var(--text-muted)">📍 ${a.location || '-'} | 📅 ${a.day || '-'} | ⏰ ${a.timeStart || ''} - ${a.timeEnd || ''}</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              ${statusBadge}
+              <button class="btn btn-sm btn-secondary" onclick="editActivity('${a.id}')">تعديل</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteActivity('${a.id}')">حذف</button>
+            </div>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:6px">
+            ${a.status !== 'ongoing' ? `<button class="btn btn-sm btn-success" onclick="changeStatus('${a.id}','ongoing')">بدء النشاط</button>` : ''}
+            ${a.status !== 'done' ? `<button class="btn btn-sm btn-warning" onclick="changeStatus('${a.id}','done')">إنهاء</button>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    async function changeStatus(id, newStatus) {
+      await db.collection('schedule').doc(id).update({ status: newStatus });
+      const activity = allActivities.find(a => a.id === id);
+      const statusText = newStatus === 'ongoing' ? 'بدأ النشاط: ' + activity.activity : 'انتهى النشاط: ' + activity.activity;
+      await addTimelineEvent(statusText, 'schedule');
+      showToast('تم تحديث الحالة');
+    }
+
+    function openAddModal() {
+      document.getElementById('modal-title').textContent = 'إضافة نشاط';
+      document.getElementById('schedule-form').reset();
+      document.getElementById('activity-id').value = '';
+      document.getElementById('schedule-modal').classList.add('active');
+    }
+
+    function closeModal() { document.getElementById('schedule-modal').classList.remove('active'); }
+
+    function editActivity(id) {
+      const a = allActivities.find(ac => ac.id === id);
+      if (!a) return;
+      document.getElementById('modal-title').textContent = 'تعديل نشاط';
+      document.getElementById('activity-id').value = id;
+      document.getElementById('activity-name').value = a.activity;
+      document.getElementById('activity-location').value = a.location || '';
+      document.getElementById('activity-day').value = a.day || '';
+      document.getElementById('activity-start').value = a.timeStart || '';
+      document.getElementById('activity-end').value = a.timeEnd || '';
+      document.getElementById('activity-status').value = a.status || 'upcoming';
+      document.getElementById('schedule-modal').classList.add('active');
+    }
+
+    async function saveActivity(e) {
+      e.preventDefault();
+      const id = document.getElementById('activity-id').value;
+      const data = {
+        activity: document.getElementById('activity-name').value.trim(),
+        location: document.getElementById('activity-location').value.trim(),
+        day: document.getElementById('activity-day').value.trim(),
+        timeStart: document.getElementById('activity-start').value,
+        timeEnd: document.getElementById('activity-end').value,
+        status: document.getElementById('activity-status').value
+      };
+      try {
+        if (id) {
+          await db.collection('schedule').doc(id).update(data);
+          showToast('تم تحديث النشاط');
+        } else {
+          data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          await db.collection('schedule').add(data);
+          showToast('تمت إضافة النشاط');
+        }
+        closeModal();
+      } catch(err) { showToast('خطأ', 'error'); }
+    }
+
+    async function deleteActivity(id) {
+      if (!confirm('حذف هذا النشاط؟')) return;
+      await db.collection('schedule').doc(id).delete();
+      showToast('تم الحذف');
+    }
+  </script>
+</body>
+</html>
